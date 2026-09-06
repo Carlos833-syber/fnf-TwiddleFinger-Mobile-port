@@ -45,16 +45,12 @@ jobs:
         with:
           ndk-version: r25c
 
-      - name: Configure Android Environment
+      - name: Configure Android
         run: |
           echo "ANDROID_SDK=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_ROOT=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
-
-          echo "ANDROID_SDK=$ANDROID_SDK_ROOT"
-          echo "ANDROID_HOME=$ANDROID_SDK_ROOT"
-          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_HOME"
 
       - name: Setup Haxelib
         run: |
@@ -64,7 +60,7 @@ jobs:
         run: |
           haxelib install hmm
 
-      - name: Install Project Dependencies
+      - name: Install Dependencies
         run: |
           haxelib run hmm install
 
@@ -73,27 +69,16 @@ jobs:
           haxelib remove lime || true
           haxelib install lime
 
-          echo "===== LIME PATH ====="
-          haxelib path lime
-
       - name: Reinstall OpenFL
         run: |
           haxelib remove openfl || true
           haxelib install openfl
 
-          echo "===== OPENFL PATH ====="
-          haxelib path openfl
-
       - name: Install hxcpp 4.3.45
         run: |
-          wget -O /tmp/hxcpp-4.3.45.zip \
-            https://github.com/HaxeFoundation/hxcpp/releases/download/v4.3.45/hxcpp-4.3.45.zip
-
-          haxelib install /tmp/hxcpp-4.3.45.zip --quiet
+          wget -O /tmp/hxcpp.zip https://github.com/HaxeFoundation/hxcpp/releases/download/v4.3.45/hxcpp-4.3.45.zip
+          haxelib install /tmp/hxcpp.zip --quiet
           haxelib set hxcpp 4.3.45
-
-          echo "===== HXCPP PATH ====="
-          haxelib path hxcpp
 
       - name: Install Flixel 5.8.0
         run: |
@@ -101,68 +86,33 @@ jobs:
           haxelib install flixel 5.8.0
           haxelib set flixel 5.8.0
 
-          echo "===== FLIXEL PATH ====="
-          haxelib path flixel
-
       - name: Install hxvlc 1.5.4
         run: |
           haxelib remove hxvlc || true
           haxelib install hxvlc 1.5.4
           haxelib set hxvlc 1.5.4
 
-          echo "===== HXVLС PATH ====="
-          haxelib path hxvlc
-
-      - name: Verify Android
+      - name: Verify Environment
         run: |
-          echo "========================================"
-          echo "ANDROID SDK"
-          echo "========================================"
-
-          echo "$ANDROID_SDK_ROOT"
-
-          echo "========================================"
-          echo "ANDROID NDK"
-          echo "========================================"
-
-          echo "$ANDROID_NDK_HOME"
-
-          echo "========================================"
-          echo "NDK VERSION"
-          echo "========================================"
-
-          cat "$ANDROID_NDK_HOME/source.properties"
-
-          echo "========================================"
-          echo "JAVA"
-          echo "========================================"
-
+          echo "===== JAVA ====="
           java -version
 
-          echo "========================================"
-          echo "HAXE"
-          echo "========================================"
-
+          echo "===== HAXE ====="
           haxe --version
 
-      - name: Verify Lime
-        run: |
-          echo "========================================"
-          echo "LIME"
-          echo "========================================"
+          echo "===== ANDROID SDK ====="
+          echo "$ANDROID_SDK_ROOT"
 
+          echo "===== ANDROID NDK ====="
+          echo "$ANDROID_NDK_HOME"
+
+          echo "===== HXCPP ====="
+          haxelib path hxcpp
+
+          echo "===== LIME ====="
           haxelib path lime
 
-          echo ""
-          echo "========================================"
-          echo "LIME NDLL"
-          echo "========================================"
-
-          find "$HOME/haxelib/lime" \
-            -name "lime.ndll" \
-            -print 2>/dev/null || true
-
-      - name: Setup Lime
+      - name: Setup Lime Android
         run: |
           export ANDROID_SDK="$ANDROID_SDK_ROOT"
           export ANDROID_HOME="$ANDROID_SDK_ROOT"
@@ -176,7 +126,7 @@ jobs:
           haxelib run lime config ANDROID_SDK "$ANDROID_SDK_ROOT"
           haxelib run lime config ANDROID_NDK_ROOT "$ANDROID_NDK_HOME"
 
-      - name: Clean Previous Build
+      - name: Clean
         run: |
           rm -rf export
           rm -rf build
@@ -189,166 +139,53 @@ jobs:
           export ANDROID_HOME="$ANDROID_SDK_ROOT"
           export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
 
-          echo "========================================"
-          echo "ANDROID ENVIRONMENT"
-          echo "========================================"
+          echo "===== BUILDING ====="
 
-          echo "ANDROID_SDK=$ANDROID_SDK"
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_ROOT"
+          haxelib run lime build android -release -D HXCPP_IGNORE_WARNINGS
 
-          echo "========================================"
-          echo "BUILDING TWIDDLEFINGER"
-          echo "========================================"
-
-          haxelib run lime build android -release -D HXCPP_IGNORE_WARNINGS --verbose
-
-      - name: Inspect Android Manifest
+      - name: Inspect Manifest
         if: steps.build.outcome == 'failure'
         run: |
-          echo "========================================"
-          echo "PROCURANDO ANDROIDMANIFEST.XML"
-          echo "========================================"
+          echo "===== PROCURANDO MANIFEST ====="
 
-          find export \
-            -name "AndroidManifest.xml" \
-            -print 2>/dev/null || true
-
-          echo ""
-          echo "========================================"
-          echo "MANIFEST PRINCIPAL"
-          echo "========================================"
+          find export -name "AndroidManifest.xml" -print 2>/dev/null || true
 
           MANIFEST="export/release/android/bin/app/src/main/AndroidManifest.xml"
 
           if [ -f "$MANIFEST" ]; then
-
-            echo "Arquivo encontrado:"
-            echo "$MANIFEST"
-
             echo ""
-            echo "========================================"
-            echo "CONTEUDO DO MANIFEST"
-            echo "========================================"
-
+            echo "===== MANIFEST ====="
             cat "$MANIFEST"
 
             echo ""
-            echo "========================================"
-            echo "MANIFEST COM NUMERO DAS LINHAS"
-            echo "========================================"
-
+            echo "===== MANIFEST COM LINHAS ====="
             nl -ba "$MANIFEST"
 
             echo ""
-            echo "========================================"
-            echo "VALIDANDO XML"
-            echo "========================================"
+            echo "===== VALIDACAO XML ====="
 
-            python3 - "$MANIFEST" <<'PY'
-import sys
-import xml.etree.ElementTree as ET
-
-manifest = sys.argv[1]
-
-print("Arquivo:", manifest)
-
-try:
-    ET.parse(manifest)
-    print("")
-    print("XML VALIDO")
-except ET.ParseError as error:
-    print("")
-    print("XML INVALIDO")
-    print("")
-    print("ERRO:")
-    print(error)
-
-    if hasattr(error, "position"):
-        line, column = error.position
-        print("")
-        print("LINHA:", line)
-        print("COLUNA:", column)
-PY
+            python3 -c 'import sys,xml.etree.ElementTree as ET; f=sys.argv[1]; print("Arquivo:",f); ET.parse(f); print("XML VALIDO")' "$MANIFEST" || true
 
           else
-
-            echo "========================================"
-            echo "MANIFEST ESPERADO NAO ENCONTRADO"
-            echo "========================================"
-
-            echo ""
-            echo "Todos os manifests encontrados:"
-
-            find . \
-              -name "AndroidManifest.xml" \
-              -print 2>/dev/null || true
-
+            echo "MANIFEST NAO ENCONTRADO"
           fi
 
-      - name: Inspect Android Project
+      - name: Inspect Android Files
         if: steps.build.outcome == 'failure'
         run: |
-          echo "========================================"
-          echo "ESTRUTURA DO PROJETO ANDROID"
-          echo "========================================"
+          echo "===== ARQUIVOS ANDROID ====="
 
-          if [ -d "export/release/android/bin/app" ]; then
-
-            find export/release/android/bin/app \
-              -maxdepth 6 \
-              -type f \
-              -print 2>/dev/null | head -500
-
+          if [ -d "export/release/android" ]; then
+            find export/release/android -maxdepth 6 -type f -print | head -500
           else
-
-            echo "Projeto Android nao encontrado."
-
+            echo "Pasta Android nao encontrada."
           fi
-
-      - name: Inspect Gradle Reports
-        if: steps.build.outcome == 'failure'
-        run: |
-          echo "========================================"
-          echo "RELATORIOS DO GRADLE"
-          echo "========================================"
-
-          find export/release/android \
-            -type f \
-            \( \
-              -name "*manifest*report*" \
-              -o \
-              -name "manifest-merger-*.txt" \
-              -o \
-              -name "manifest-merger-*.xml" \
-              -o \
-              -name "*.log" \
-            \) \
-            -print 2>/dev/null || true
-
-      - name: Show Gradle Manifest Files
-        if: steps.build.outcome == 'failure'
-        run: |
-          echo "========================================"
-          echo "MANIFESTS DO PROJETO"
-          echo "========================================"
-
-          find export/release/android \
-            -type f \
-            -name "AndroidManifest.xml" \
-            -print 2>/dev/null || true
 
       - name: Find APK
         if: always()
         run: |
-          echo "========================================"
-          echo "PROCURANDO APK"
-          echo "========================================"
-
-          find . \
-            -type f \
-            -name "*.apk" \
-            -print 2>/dev/null || true
+          echo "===== APK ====="
+          find . -type f -name "*.apk" -print 2>/dev/null || true
 
       - name: Upload Diagnostics
         if: steps.build.outcome == 'failure'
@@ -361,12 +198,10 @@ PY
             export/release/android/**/*.log
           if-no-files-found: ignore
 
-      - name: Stop If Build Failed
+      - name: Stop If Failed
         if: steps.build.outcome == 'failure'
         run: |
-          echo "========================================"
           echo "BUILD FALHOU"
-          echo "========================================"
           exit 1
 
       - name: Upload APK
