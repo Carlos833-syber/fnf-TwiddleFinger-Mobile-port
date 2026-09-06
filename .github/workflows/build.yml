@@ -78,7 +78,7 @@ jobs:
           haxelib install hxvlc 1.5.4
           haxelib set hxvlc 1.5.4
 
-      - name: Verify Haxe
+      - name: Verify Haxe and Haxelib
         run: |
           echo "========== HAXE =========="
           haxe --version
@@ -91,6 +91,9 @@ jobs:
 
           echo "========== OPENFL =========="
           haxelib path openfl
+
+          echo "========== HXCPP =========="
+          haxelib path hxcpp
 
           echo "========== FLIXEL =========="
           haxelib path flixel
@@ -116,18 +119,46 @@ jobs:
             echo "ANDROID_NDK_ROOT=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
           fi
 
-      - name: Check Android environment
+      - name: Debug C++ Android
         run: |
+          echo "========== ANDROID ENVIRONMENT =========="
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_ROOT"
           echo "JAVA_HOME=$JAVA_HOME"
 
+          echo "========== NDK VERSION =========="
           if [ -n "$ANDROID_NDK_HOME" ]; then
-            echo "NDK version:"
             cat "$ANDROID_NDK_HOME/source.properties" || true
           fi
 
+          echo "========== CLANG VERSION =========="
+          if [ -f "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++" ]; then
+            "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++" --version
+          else
+            echo "clang++ não encontrado no caminho esperado"
+          fi
+
+          echo "========== TYPEINFO HEADERS =========="
+          find "$ANDROID_NDK_HOME" -name "typeinfo" -print | head -20 || true
+
+          echo "========== C++ INCLUDE DIRECTORIES =========="
+          find "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64" \
+            -type d -name "include" -print | head -30 || true
+
+          echo "========== HXCPP =========="
+          haxelib path hxcpp
+
+      - name: Check Android tools
+        run: |
+          echo "========== ADB =========="
           adb version || true
+
+          echo "========== SDKMANAGER =========="
+          sdkmanager --version || true
+
+          echo "========== NDK DIRECTORY =========="
+          ls -la "$ANDROID_NDK_HOME" || true
 
       - name: Clean build
         run: |
