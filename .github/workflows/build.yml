@@ -8,26 +8,14 @@ on:
       - master
 
 jobs:
-  build-android:
-    name: Build APK
+  build:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install C++ tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            gcc \
-            g++ \
-            clang \
-            libc++-dev \
-            libc++abi-dev
-
-      - name: Setup Java 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -53,30 +41,17 @@ jobs:
         with:
           ndk-version: r25c
 
-      - name: Configure Android environment
-        run: |
-          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
-          echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
-
       - name: Setup Haxelib
         run: |
           haxelib setup ~/haxelib
 
       - name: Install Lime
         run: |
-          haxelib remove lime || true
           haxelib install lime
-          echo "========== LIME =========="
-          haxelib list | grep lime || true
-          haxelib path lime
 
       - name: Install OpenFL
         run: |
-          haxelib remove openfl || true
           haxelib install openfl
-          haxelib path openfl
 
       - name: Install HMM
         run: |
@@ -86,69 +61,69 @@ jobs:
         run: |
           haxelib run hmm install
 
-      - name: Fix hxcpp
-        run: |
-          haxelib remove hxcpp || true
-          haxelib install hxcpp
-          echo "========== HXCPP =========="
-          haxelib list | grep hxcpp || true
-          haxelib path hxcpp
-
-      - name: Force Flixel 5.8.0
+      - name: Install Flixel
         run: |
           haxelib remove flixel || true
           haxelib install flixel 5.8.0
           haxelib set flixel 5.8.0
 
-      - name: Install hxvlc 1.5.4
+      - name: Install hxvlc
         run: |
           haxelib remove hxvlc || true
           haxelib install hxvlc 1.5.4
           haxelib set hxvlc 1.5.4
 
-      - name: Rebuild Lime native library
+      - name: Install hxcpp
         run: |
-          echo "========== REBUILD LIME =========="
-          haxelib run lime rebuild cpp
+          haxelib remove hxcpp || true
+          haxelib install hxcpp
+
+      - name: Setup Lime
+        run: |
+          haxelib run lime setup
 
       - name: Setup Lime Android
         run: |
           haxelib run lime setup android
 
-      - name: Check Lime NDLL
+      - name: Rebuild Lime
         run: |
-          echo "========== LIME NDLL =========="
-          find ~/.haxelib -name "lime.ndll" -print || true
-          find .haxelib -name "lime.ndll" -print || true
+          haxelib run lime rebuild cpp
 
-      - name: Check environment
+      - name: Check libraries
         run: |
-          echo "========== HAXE =========="
+          echo "Haxe:"
           haxe --version
 
-          echo "========== HAXELIB =========="
+          echo "Haxelib:"
           haxelib list
 
-          echo "========== LIME =========="
+          echo "Lime:"
           haxelib path lime
 
-          echo "========== HXCPP =========="
+          echo "HXCPP:"
           haxelib path hxcpp
 
-          echo "========== NDK =========="
-          cat "$ANDROID_NDK_HOME/source.properties"
-
-          echo "========== CLANG =========="
-          clang++ --version
-
-      - name: Clean build
+      - name: Clean
         run: |
           rm -rf export
           rm -rf build
 
-      - name: Build Android APK
+      - name: Build Android
         run: |
           haxelib run lime build android -release -D HXCPP_IGNORE_WARNINGS
 
       - name: Find APK
-       
+        if: always()
+        run: |
+          find . -type f -name "*.apk" -print
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TwiddleFinger-Android-APK
+          path: |
+            export/**/*.apk
+            export/**/**/*.apk
+            export/**/**/**/*.apk
+          if-no-files-found: error
