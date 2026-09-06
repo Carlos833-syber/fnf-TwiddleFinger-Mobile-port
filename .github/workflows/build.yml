@@ -41,9 +41,9 @@ jobs:
 
 
       # ==========================================
-      # ANDROID
+      # ANDROID SDK
       # ==========================================
-      - name: Setup Android SDK
+      - name: Setup Android
         uses: android-actions/setup-android@v3
 
 
@@ -94,7 +94,7 @@ jobs:
       # ==========================================
       # HMM
       # ==========================================
-      - name: Install HMM
+      - name: Install HMM dependencies
         run: |
           haxelib install hmm --quiet
           haxelib run hmm install
@@ -106,7 +106,7 @@ jobs:
       - name: Install Lime
         run: |
           haxelib remove lime || true
-          haxelib install lime --quiet
+          haxelib install lime 8.3.2 --quiet
 
 
       # ==========================================
@@ -133,12 +133,17 @@ jobs:
 
 
       # ==========================================
-      # FLIXEL
+      # FLIXEL 5.9.0
       # ==========================================
-      - name: Install Flixel 5.8.0
+      #
+      # Importante:
+      # Flixel 5.9.0 contém a correção relacionada
+      # ao AndroidManifest com Lime 8.2+.
+      #
+      - name: Install Flixel 5.9.0
         run: |
           haxelib remove flixel || true
-          haxelib install flixel 5.8.0 --quiet
+          haxelib install flixel 5.9.0 --quiet
 
 
       # ==========================================
@@ -155,22 +160,22 @@ jobs:
       # ==========================================
       - name: Check Haxelib
         run: |
-          echo "=============================="
+          echo "========================================"
           echo "HAXE"
-          echo "=============================="
+          echo "========================================"
 
           haxe --version
 
           echo ""
-          echo "=============================="
+          echo "========================================"
           echo "HAXELIB"
-          echo "=============================="
+          echo "========================================"
 
           haxelib list
 
 
       # ==========================================
-      # CONFIGURAR LIME
+      # CONFIGURAR LIME ANDROID
       # ==========================================
       - name: Setup Lime Android
         run: |
@@ -191,18 +196,18 @@ jobs:
       # ==========================================
       - name: Check Lime
         run: |
-          echo "=============================="
-          echo "LIME PATH"
-          echo "=============================="
+          echo "========================================"
+          echo "LIME"
+          echo "========================================"
 
           haxelib path lime
 
           echo ""
-          echo "Lime instalado corretamente."
+          echo "Lime encontrado corretamente."
 
 
       # ==========================================
-      # LIMPAR
+      # LIMPAR BUILD
       # ==========================================
       - name: Clean
         run: |
@@ -219,7 +224,7 @@ jobs:
 
 
       # ==========================================
-      # PROCURAR MANIFEST
+      # LOCALIZAR MANIFEST
       # ==========================================
       - name: Find AndroidManifest
         run: |
@@ -234,13 +239,16 @@ jobs:
 
 
       # ==========================================
-      # CORRIGIR MANIFEST
+      # CORREÇÃO EXTRA DO MANIFEST
       # ==========================================
+      #
+      # Esta etapa é apenas uma proteção.
+      # O Flixel 5.9.0 já deve evitar o problema.
+      #
       - name: Fix AndroidManifest
         run: |
-
           echo "========================================"
-          echo "CORRIGINDO ANDROID MANIFEST"
+          echo "CORRIGINDO MANIFEST"
           echo "========================================"
 
           find export \
@@ -248,83 +256,45 @@ jobs:
             -type f \
             | while read file
           do
-
             echo ""
             echo "Arquivo:"
             echo "$file"
 
-            # Remove condição inválida do Lime
             sed -i 's/ if="lime &ge; 8.2.0"//g' "$file"
-
-            # Remove versão sem entidade XML
             sed -i 's/ if="lime >= 8.2.0"//g' "$file"
 
-            # Outras possíveis variações
             sed -i 's/ if="lime &lt;= 8.2.0"//g' "$file"
-
             sed -i 's/ if="lime <= 8.2.0"//g' "$file"
-
-            echo ""
-            echo "Manifest corrigido:"
-            cat "$file"
 
           done
 
 
       # ==========================================
-      # VERIFICAR MANIFEST
+      # MOSTRAR MANIFEST
       # ==========================================
-      - name: Verify Manifest
+      - name: Show AndroidManifest
         run: |
-
           echo "========================================"
-          echo "VERIFICANDO MANIFEST"
+          echo "MANIFEST FINAL"
           echo "========================================"
 
-          FOUND=0
-
-          while IFS= read -r file
-          do
-
-            FOUND=1
-
-            echo ""
-            echo "Verificando:"
-            echo "$file"
-
-            if grep -n 'lime &ge;' "$file"; then
+          find export \
+            -name "AndroidManifest.xml" \
+            -type f \
+            -exec sh -c '
               echo ""
-              echo "ERRO: &ge; ainda está no Manifest."
-              exit 1
-            fi
-
-            if grep -n 'lime >=' "$file"; then
-              echo ""
-              echo "ERRO: lime >= ainda está no Manifest."
-              exit 1
-            fi
-
-          done < <(
-            find export \
-              -name "AndroidManifest.xml" \
-              -type f
-          )
-
-          if [ "$FOUND" = "0" ]; then
-            echo "Nenhum AndroidManifest encontrado."
-            exit 1
-          fi
-
-          echo ""
-          echo "Manifest verificado."
+              echo "========================================"
+              echo "$1"
+              echo "========================================"
+              nl -ba "$1"
+            ' _ {} \;
 
 
       # ==========================================
       # VALIDAR XML
       # ==========================================
-      - name: Validate Manifest XML
+      - name: Validate AndroidManifest XML
         run: |
-
           python3 - <<'PY'
 
           import glob
@@ -336,27 +306,24 @@ jobs:
           )
 
           print("========================================")
-          print("VALIDAÇÃO XML")
+          print("VALIDANDO XML")
           print("========================================")
 
           if not files:
-              print("Nenhum Manifest encontrado.")
+              print("Nenhum AndroidManifest encontrado.")
               raise SystemExit(1)
 
           for file in files:
 
               print("")
-              print("Validando:", file)
+              print("Arquivo:", file)
 
               try:
-
                   ET.parse(file)
-
                   print("XML OK")
 
               except Exception as error:
 
-                  print("")
                   print("XML INVÁLIDO:")
                   print(error)
 
@@ -366,33 +333,40 @@ jobs:
 
 
       # ==========================================
-      # MOSTRAR MANIFEST FINAL
+      # VERIFICAR CONDIÇÃO PROBLEMÁTICA
       # ==========================================
-      - name: Show Manifest
+      - name: Check Manifest Conditions
         run: |
-
           echo "========================================"
-          echo "MANIFEST FINAL"
+          echo "VERIFICANDO CONDIÇÕES"
           echo "========================================"
 
-          find export/release/android \
-            -name "AndroidManifest.xml" \
-            -type f \
-            -print \
-            -exec sh -c '
-              echo "----------------------------------------"
-              echo "$1"
-              echo "----------------------------------------"
-              nl -ba "$1"
-            ' _ {} \;
+          if grep -Rni 'lime &ge;' \
+            export/release/android \
+            2>/dev/null
+          then
+            echo ""
+            echo "ERRO: lime &ge; ainda está presente."
+            exit 1
+          fi
+
+          if grep -Rni 'lime >=' \
+            export/release/android \
+            2>/dev/null
+          then
+            echo ""
+            echo "ERRO: lime >= ainda está presente."
+            exit 1
+          fi
+
+          echo "Nenhuma condição inválida encontrada."
 
 
       # ==========================================
-      # COMPILAR APK
+      # GRADLE
       # ==========================================
       - name: Build APK
         run: |
-
           echo "========================================"
           echo "COMPILANDO APK"
           echo "========================================"
@@ -412,7 +386,6 @@ jobs:
       - name: Find APK
         if: success()
         run: |
-
           echo "========================================"
           echo "APKS"
           echo "========================================"
@@ -429,7 +402,6 @@ jobs:
       - name: Prepare APK
         if: success()
         run: |
-
           mkdir -p dist
 
           APK=$(find export \
@@ -438,14 +410,11 @@ jobs:
             | head -n 1)
 
           if [ -z "$APK" ]; then
-
             echo "Nenhum APK encontrado."
-
             exit 1
-
           fi
 
-          echo "APK:"
+          echo "APK encontrado:"
           echo "$APK"
 
           cp "$APK" \
@@ -470,7 +439,6 @@ jobs:
       - name: Diagnostics
         if: always()
         run: |
-
           echo "========================================"
           echo "DIAGNÓSTICO"
           echo "========================================"
@@ -488,7 +456,7 @@ jobs:
           cat hmm.json || true
 
           echo ""
-          echo "MANIFESTS"
+          echo "ANDROID MANIFESTS"
           echo "========================================"
 
           find export \
@@ -498,7 +466,7 @@ jobs:
             || true
 
           echo ""
-          echo "PROCURANDO PROBLEMAS"
+          echo "PROCURANDO IF / LIME"
           echo "========================================"
 
           grep -Rni \
@@ -509,7 +477,7 @@ jobs:
 
 
       # ==========================================
-      # UPLOAD DIAGNÓSTICO
+      # UPLOAD DIAGNÓSTICOS
       # ==========================================
       - name: Upload diagnostics
         if: always()
