@@ -1,0 +1,108 @@
+name: Build TwiddleFinger Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build-android:
+    name: Build APK
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Haxe
+        uses: krdlab/setup-haxe@v1
+        with:
+          haxe-version: '4.3.5'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager "platform-tools"
+          sdkmanager "platforms;android-34"
+          sdkmanager "build-tools;34.0.0"
+
+      - name: Install Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r21e
+
+      - name: Setup Haxelib
+        run: |
+          haxelib setup ~/haxelib
+
+      - name: Install Haxe dependencies
+        run: |
+          if [ -f hmm.json ]; then
+            haxelib install hmm
+            haxelib run hmm install
+          else
+            haxelib install lime
+            haxelib install openfl
+            haxelib install flixel
+            haxelib install flixel-addons
+            haxelib install flixel-ui
+          fi
+
+      - name: Install Lime
+        run: |
+          haxelib run lime setup
+          haxelib run lime setup flixel
+
+      - name: Configure Android environment
+        run: |
+          echo "ANDROID_SDK=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_HOME" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> $GITHUB_ENV
+          echo "JAVA_HOME=$JAVA_HOME" >> $GITHUB_ENV
+
+          haxelib run lime config ANDROID_SDK "$ANDROID_SDK_ROOT"
+          haxelib run lime config ANDROID_NDK_ROOT "$ANDROID_NDK_HOME"
+          haxelib run lime config JAVA_HOME "$JAVA_HOME"
+
+      - name: Install extension-androidtools if needed
+        run: |
+          if grep -q "extension-androidtools" Project.xml; then
+            haxelib git extension-androidtools https://github.com/jigsaw-4277821/extension-androidtools.git
+          fi
+
+      - name: Prepare Lime
+        run: |
+          haxelib run lime setup android
+
+      - name: Clean previous builds
+        run: |
+          rm -rf export
+          rm -rf build
+
+      - name: Build Android APK
+        run: |
+          haxelib run lime build android -release -D HXCPP_IGNORE_WARNINGS
+
+      - name: Find APK
+        run: |
+          echo "APKs encontrados:"
+          find export -type f -name "*.apk" -print
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TwiddleFinger-Android
+          path: |
+            export/**/*.apk
+          if-no-files-found: error
