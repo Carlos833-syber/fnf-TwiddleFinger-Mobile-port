@@ -2,16 +2,22 @@ name: Build TwiddleFinger Android APK
 
 on:
   workflow_dispatch:
+
   push:
     branches:
       - main
       - master
 
+permissions:
+  contents: read
+
 jobs:
   build:
+    name: Build Android APK
     runs-on: ubuntu-22.04
 
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -43,17 +49,15 @@ jobs:
         with:
           ndk-version: r25c
 
-      - name: Configure Android environment
+      - name: Configure Android
         run: |
           echo "ANDROID_SDK=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_ROOT=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
-          echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
 
           echo "ANDROID_SDK=$ANDROID_SDK_ROOT"
           echo "ANDROID_NDK_ROOT=$ANDROID_NDK_HOME"
-          echo "JAVA_HOME=$JAVA_HOME"
 
       - name: Setup Haxelib
         run: |
@@ -72,7 +76,7 @@ jobs:
           haxelib remove lime || true
           haxelib install lime
 
-          echo "========== LIME =========="
+          echo "===== LIME ====="
           haxelib path lime
 
       - name: Install OpenFL
@@ -80,7 +84,7 @@ jobs:
           haxelib remove openfl || true
           haxelib install openfl
 
-          echo "========== OPENFL =========="
+          echo "===== OPENFL ====="
           haxelib path openfl
 
       - name: Install hxcpp 4.3.45
@@ -91,7 +95,7 @@ jobs:
           haxelib install /tmp/hxcpp-4.3.45.zip --quiet
           haxelib set hxcpp 4.3.45
 
-          echo "========== HXCPP =========="
+          echo "===== HXCPP ====="
           haxelib path hxcpp
 
       - name: Install Flixel 5.8.0
@@ -106,40 +110,29 @@ jobs:
           haxelib install hxvlc 1.5.4
           haxelib set hxvlc 1.5.4
 
-      - name: Verify Android environment
+      - name: Verify Android
         run: |
-          echo "========== ANDROID SDK =========="
+          echo "===== ANDROID SDK ====="
           echo "$ANDROID_SDK"
 
-          echo "========== ANDROID NDK =========="
+          echo "===== ANDROID NDK ====="
           echo "$ANDROID_NDK_ROOT"
 
-          echo "========== JAVA =========="
-          echo "$JAVA_HOME"
-
-          echo "========== NDK VERSION =========="
+          echo "===== NDK VERSION ====="
           cat "$ANDROID_NDK_ROOT/source.properties"
 
-          echo "========== LIME =========="
+          echo "===== JAVA ====="
+          echo "$JAVA_HOME"
+
+      - name: Verify Lime
+        run: |
+          echo "===== LIME PATH ====="
           haxelib path lime
 
-          echo "========== HXCPP =========="
-          haxelib path hxcpp
-
-      - name: Find Lime NDLL
-        run: |
-          echo "========== SEARCHING lime.ndll =========="
-
+          echo "===== LIME NDLL ====="
           find "$HOME/haxelib/lime" \
             -name "lime.ndll" \
             -print || true
-
-          echo "========== LIME DIRECTORY =========="
-
-          find "$HOME/haxelib/lime" \
-            -maxdepth 4 \
-            -type f \
-            | head -200 || true
 
       - name: Setup Lime
         run: |
@@ -149,15 +142,12 @@ jobs:
         run: |
           haxelib run lime setup android
 
-      - name: Verify Lime Android
+      - name: Configure Lime Android
         run: |
-          echo "ANDROID_SDK=$ANDROID_SDK"
-          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_ROOT"
-
           haxelib run lime config ANDROID_SDK "$ANDROID_SDK"
           haxelib run lime config ANDROID_NDK_ROOT "$ANDROID_NDK_ROOT"
 
-      - name: Clean previous build
+      - name: Clean
         run: |
           rm -rf export
           rm -rf build
@@ -168,47 +158,49 @@ jobs:
           export ANDROID_HOME="$ANDROID_SDK_ROOT"
           export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
 
-          echo "========== BUILD ENVIRONMENT =========="
-          echo "ANDROID_SDK=$ANDROID_SDK"
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_ROOT"
+          echo "===== BUILD ====="
 
           haxelib run lime build android -release -D HXCPP_IGNORE_WARNINGS
 
-      - name: Inspect AndroidManifest after failure
+      - name: Find APK
+        if: always()
+        run: |
+          echo "===== APK ====="
+
+          find . \
+            -type f \
+            -name "*.apk" \
+            -print || true
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TwiddleFinger-Android-APK
+          path: |
+            export/**/*.apk
+            export/**/**/*.apk
+            export/**/**/**/*.apk
+          if-no-files-found: error
+
+      - name: Android Manifest Diagnostics
         if: failure()
         run: |
-          echo "======================================"
-          echo "SEARCHING FOR ANDROID MANIFEST FILES"
-          echo "======================================"
+          echo "===== ANDROID MANIFESTS ====="
 
           find export \
             -name "AndroidManifest.xml" \
             -print 2>/dev/null || true
 
-          echo ""
-          echo "======================================"
-          echo "EXPECTED MANIFEST"
-          echo "======================================"
-
           MANIFEST="export/release/android/bin/app/src/main/AndroidManifest.xml"
 
           if [ -f "$MANIFEST" ]; then
 
-            echo "FOUND:"
-            echo "$MANIFEST"
-
-            echo ""
-            echo "======================================"
-            echo "ANDROIDMANIFEST.XML"
-            echo "======================================"
+            echo "===== MANIFEST ====="
 
             nl -ba "$MANIFEST"
 
-            echo ""
-            echo "======================================"
-            echo "XML VALIDATION"
-            echo "======================================"
+            echo "===== XML CHECK ====="
 
             python3 - "$MANIFEST" <<'PY'
 import sys
@@ -216,40 +208,17 @@ import xml.etree.ElementTree as ET
 
 path = sys.argv[1]
 
-print("Validating:", path)
+print("Checking:", path)
 
 try:
     ET.parse(path)
     print("XML OK")
-except Exception as e:
-    print("XML INVALID")
-    print("ERROR:", e)
+except Exception as error:
+    print("XML ERROR:")
+    print(error)
     raise
 PY
 
           else
-
-            echo "Manifesto esperado não foi encontrado."
-
-            echo ""
-            echo "Tentando localizar outros manifests..."
-
-            find . \
-              -name "AndroidManifest.xml" \
-              -print 2>/dev/null || true
-
+            echo "Manifest not found."
           fi
-
-      - name: Show Gradle manifest reports
-        if: failure()
-        run: |
-          echo "======================================"
-          echo "GRADLE MANIFEST REPORTS"
-          echo "======================================"
-
-          find export/release/android \
-            -type f \
-            \( \
-              -name "*manifest*report*" \
-              -o \
-              -name "
