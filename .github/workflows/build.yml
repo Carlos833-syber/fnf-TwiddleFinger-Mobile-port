@@ -12,10 +12,11 @@ permissions:
 
 jobs:
   build:
-    name: Build TwiddleFinger Android
+    name: Build Android APK
     runs-on: ubuntu-22.04
 
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -69,7 +70,7 @@ jobs:
           haxelib remove lime || true
           haxelib install lime
 
-          echo "===== LIME ====="
+          echo "===== LIME PATH ====="
           haxelib path lime
 
       - name: Reinstall OpenFL
@@ -77,7 +78,7 @@ jobs:
           haxelib remove openfl || true
           haxelib install openfl
 
-          echo "===== OPENFL ====="
+          echo "===== OPENFL PATH ====="
           haxelib path openfl
 
       - name: Install hxcpp 4.3.45
@@ -123,7 +124,7 @@ jobs:
           echo "===== LIME ====="
           haxelib path lime
 
-      - name: Setup Lime Android
+      - name: Setup Lime
         run: |
           export ANDROID_SDK="$ANDROID_SDK_ROOT"
           export ANDROID_HOME="$ANDROID_SDK_ROOT"
@@ -151,112 +152,114 @@ jobs:
           export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
 
           echo "========================================"
-          echo "BUILD TWIDDLEFINGER ANDROID"
+          echo "BUILDING TWIDDLEFINGER"
           echo "========================================"
 
           haxelib run lime build android -release -D HXCPP_IGNORE_WARNINGS
 
-      - name: Diagnose Android Manifest
+      - name: Diagnose Manifest
         if: always()
         run: |
           echo "========================================"
-          echo "PROCURANDO ANDROIDMANIFEST.XML"
+          echo "ANDROID MANIFEST SEARCH"
           echo "========================================"
 
           find . \
+            -type f \
             -name "AndroidManifest.xml" \
             -print 2>/dev/null || true
 
           echo ""
           echo "========================================"
-          echo "MANIFEST PRINCIPAL"
+          echo "MAIN MANIFEST"
           echo "========================================"
 
           MANIFEST="export/release/android/bin/app/src/main/AndroidManifest.xml"
 
           if [ -f "$MANIFEST" ]; then
 
-            echo "ARQUIVO:"
+            echo "MANIFEST FOUND:"
             echo "$MANIFEST"
 
             echo ""
             echo "========================================"
-            echo "CONTEUDO DO MANIFEST"
-            echo "========================================"
-
-            cat "$MANIFEST"
-
-            echo ""
-            echo "========================================"
-            echo "MANIFEST COM NUMERO DAS LINHAS"
+            echo "MANIFEST CONTENT"
             echo "========================================"
 
             nl -ba "$MANIFEST"
 
             echo ""
             echo "========================================"
-            echo "VALIDACAO XML"
+            echo "XML VALIDATION"
             echo "========================================"
 
-            python3 -c 'import sys,xml.etree.ElementTree as ET; f=sys.argv[1]; print("Verificando:",f); ET.parse(f); print("XML VALIDO")' \
-              "$MANIFEST" \
-              || true
+            python3 -c 'import sys,xml.etree.ElementTree as ET; f=sys.argv[1]; ET.parse(f); print("XML VALID")' "$MANIFEST" 2>&1 || true
+
+            echo ""
+            echo "========================================"
+            echo "SUSPICIOUS CONTENT"
+            echo "========================================"
+
+            grep -n "lime" "$MANIFEST" || true
+            grep -n "if=" "$MANIFEST" || true
+            grep -n "&ge;" "$MANIFEST" || true
+            grep -n "&le;" "$MANIFEST" || true
 
           else
 
-            echo "MANIFEST PRINCIPAL NAO ENCONTRADO"
+            echo "MAIN MANIFEST NOT FOUND"
 
           fi
 
-      - name: Diagnose Android Project
+      - name: Diagnose All Android Manifests
         if: always()
         run: |
           echo "========================================"
-          echo "ESTRUTURA DO PROJETO ANDROID"
+          echo "ALL MANIFEST FILES"
+          echo "========================================"
+
+          find export/release/android \
+            -type f \
+            -name "AndroidManifest.xml" \
+            -print 2>/dev/null || true
+
+          echo ""
+          echo "========================================"
+          echo "ANDROID PROJECT FILES"
           echo "========================================"
 
           if [ -d "export/release/android" ]; then
-
             find export/release/android \
               -maxdepth 7 \
               -type f \
               -print 2>/dev/null | head -500
-
-          else
-
-            echo "PASTA ANDROID NAO ENCONTRADA"
-
           fi
 
-      - name: Diagnose Gradle Manifest Reports
+      - name: Diagnose Gradle
         if: always()
         run: |
           echo "========================================"
-          echo "RELATORIOS DO MANIFEST MERGER"
+          echo "GRADLE MANIFEST REPORTS"
           echo "========================================"
 
-          if [ -d "export/release/android" ]; then
-
-            find export/release/android \
-              -type f \
-              \( \
-                -name "*manifest*report*" \
-                -o \
-                -name "manifest-merger-*.txt" \
-                -o \
-                -name "manifest-merger-*.xml" \
-                -o \
-                -name "*.log" \
-              \) \
-              -print 2>/dev/null || true
-
-          fi
+          find export/release/android \
+            -type f \
+            \( \
+              -name "*manifest*report*" \
+              -o \
+              -name "manifest-merger-*.txt" \
+              -o \
+              -name "manifest-merger-*.xml" \
+              -o \
+              -name "*.log" \
+            \) \
+            -print 2>/dev/null || true
 
       - name: Find APK
         if: always()
         run: |
           echo "========================================"
-          echo "PROCURANDO APK"
+          echo "APK SEARCH"
           echo "========================================"
 
           find . \
@@ -279,7 +282,7 @@ jobs:
         if: steps.build_apk.outcome == 'failure'
         run: |
           echo "========================================"
-          echo "BUILD FALHOU"
+          echo "BUILD FAILED"
           echo "========================================"
           exit 1
 
