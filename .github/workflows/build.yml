@@ -2,7 +2,6 @@ name: Build TwiddleFinger Android APK
 
 on:
   workflow_dispatch:
-
   push:
     branches:
       - main
@@ -13,11 +12,9 @@ permissions:
 
 jobs:
   build:
-    name: Build Android APK
     runs-on: ubuntu-22.04
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -32,19 +29,17 @@ jobs:
         with:
           haxe-version: "4.3.5"
 
-      - name: Setup Android SDK
+      - name: Setup Android
         uses: android-actions/setup-android@v3
 
       - name: Install Android SDK
         run: |
           yes | sdkmanager --licenses || true
+          sdkmanager "platform-tools"
+          sdkmanager "platforms;android-34"
+          sdkmanager "build-tools;34.0.0"
 
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-34" \
-            "build-tools;34.0.0"
-
-      - name: Setup Android NDK
+      - name: Setup NDK
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: r25c
@@ -56,9 +51,6 @@ jobs:
           echo "ANDROID_NDK_ROOT=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
 
-          echo "ANDROID_SDK=$ANDROID_SDK_ROOT"
-          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_HOME"
-
       - name: Setup Haxelib
         run: |
           haxelib setup ~/haxelib
@@ -67,158 +59,69 @@ jobs:
         run: |
           haxelib install hmm
 
-      - name: Install project dependencies
+      - name: Install dependencies
         run: |
           haxelib run hmm install
 
-      - name: Reinstall Lime
+      - name: Install Lime
         run: |
           haxelib remove lime || true
           haxelib install lime
-
-          echo "===== LIME ====="
-          haxelib path lime
 
       - name: Install OpenFL
         run: |
           haxelib remove openfl || true
           haxelib install openfl
 
-          echo "===== OPENFL ====="
-          haxelib path openfl
-
       - name: Install hxcpp 4.3.45
         run: |
-          wget -O /tmp/hxcpp-4.3.45.zip \
-            https://github.com/HaxeFoundation/hxcpp/releases/download/v4.3.45/hxcpp-4.3.45.zip
-
-          haxelib install /tmp/hxcpp-4.3.45.zip --quiet
+          wget -O /tmp/hxcpp.zip https://github.com/HaxeFoundation/hxcpp/releases/download/v4.3.45/hxcpp-4.3.45.zip
+          haxelib install /tmp/hxcpp.zip --quiet
           haxelib set hxcpp 4.3.45
 
-          echo "===== HXCPP ====="
-          haxelib path hxcpp
-
-      - name: Install Flixel 5.8.0
+      - name: Install Flixel
         run: |
           haxelib remove flixel || true
           haxelib install flixel 5.8.0
           haxelib set flixel 5.8.0
 
-      - name: Install hxvlc 1.5.4
+      - name: Install hxvlc
         run: |
           haxelib remove hxvlc || true
           haxelib install hxvlc 1.5.4
           haxelib set hxvlc 1.5.4
 
-      - name: Verify Android
-        run: |
-          echo "===== ANDROID SDK ====="
-          echo "$ANDROID_SDK"
-
-          echo "===== ANDROID NDK ====="
-          echo "$ANDROID_NDK_ROOT"
-
-          echo "===== NDK VERSION ====="
-          cat "$ANDROID_NDK_ROOT/source.properties"
-
-          echo "===== JAVA ====="
-          echo "$JAVA_HOME"
-
-      - name: Verify Lime
-        run: |
-          echo "===== LIME PATH ====="
-          haxelib path lime
-
-          echo "===== LIME NDLL ====="
-          find "$HOME/haxelib/lime" \
-            -name "lime.ndll" \
-            -print || true
-
       - name: Setup Lime
         run: |
           haxelib run lime setup
-
-      - name: Setup Lime Android
-        run: |
           haxelib run lime setup android
 
-      - name: Configure Lime Android
+      - name: Configure Lime
         run: |
-          haxelib run lime config ANDROID_SDK "$ANDROID_SDK"
-          haxelib run lime config ANDROID_NDK_ROOT "$ANDROID_NDK_ROOT"
+          haxelib run lime config ANDROID_SDK "$ANDROID_SDK_ROOT"
+          haxelib run lime config ANDROID_NDK_ROOT "$ANDROID_NDK_HOME"
 
       - name: Clean
         run: |
           rm -rf export
           rm -rf build
 
-      - name: Build Android APK
+      - name: Build APK
         run: |
           export ANDROID_SDK="$ANDROID_SDK_ROOT"
           export ANDROID_HOME="$ANDROID_SDK_ROOT"
           export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
-
-          echo "===== BUILD ====="
-
           haxelib run lime build android -release -D HXCPP_IGNORE_WARNINGS
 
       - name: Find APK
         if: always()
         run: |
-          echo "===== APK ====="
-
-          find . \
-            -type f \
-            -name "*.apk" \
-            -print || true
+          find . -type f -name "*.apk" -print
 
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: TwiddleFinger-Android-APK
-          path: |
-            export/**/*.apk
-            export/**/**/*.apk
-            export/**/**/**/*.apk
+          path: export/**/*.apk
           if-no-files-found: error
-
-      - name: Android Manifest Diagnostics
-        if: failure()
-        run: |
-          echo "===== ANDROID MANIFESTS ====="
-
-          find export \
-            -name "AndroidManifest.xml" \
-            -print 2>/dev/null || true
-
-          MANIFEST="export/release/android/bin/app/src/main/AndroidManifest.xml"
-
-          if [ -f "$MANIFEST" ]; then
-
-            echo "===== MANIFEST ====="
-
-            nl -ba "$MANIFEST"
-
-            echo "===== XML CHECK ====="
-
-            python3 - "$MANIFEST" <<'PY'
-import sys
-import xml.etree.ElementTree as ET
-
-path = sys.argv[1]
-
-print("Checking:", path)
-
-try:
-    ET.parse(path)
-    print("XML OK")
-except Exception as error:
-    print("XML ERROR:")
-    print(error)
-    raise
-PY
-
-          else
-            echo "Manifest not found."
-          fi
