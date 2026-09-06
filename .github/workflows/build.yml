@@ -41,17 +41,20 @@ jobs:
         with:
           ndk-version: r25c
 
+      - name: Configure Android environment
+        run: |
+          echo "ANDROID_SDK=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
+          echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+
+          echo "ANDROID_SDK=$ANDROID_SDK_ROOT"
+          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_HOME"
+
       - name: Setup Haxelib
         run: |
           haxelib setup ~/haxelib
-
-      - name: Install Lime
-        run: |
-          haxelib install lime
-
-      - name: Install OpenFL
-        run: |
-          haxelib install openfl
 
       - name: Install HMM
         run: |
@@ -61,22 +64,55 @@ jobs:
         run: |
           haxelib run hmm install
 
-      - name: Install Flixel
+      - name: Reinstall Lime
+        run: |
+          haxelib remove lime || true
+          haxelib install lime
+
+      - name: Install OpenFL
+        run: |
+          haxelib remove openfl || true
+          haxelib install openfl
+
+      - name: Install hxcpp 4.3.45
+        run: |
+          wget -O /tmp/hxcpp-4.3.45.zip \
+            https://github.com/HaxeFoundation/hxcpp/releases/download/v4.3.45/hxcpp-4.3.45.zip
+
+          haxelib install /tmp/hxcpp-4.3.45.zip --quiet
+          haxelib set hxcpp 4.3.45
+
+      - name: Install Flixel 5.8.0
         run: |
           haxelib remove flixel || true
           haxelib install flixel 5.8.0
           haxelib set flixel 5.8.0
 
-      - name: Install hxvlc
+      - name: Install hxvlc 1.5.4
         run: |
           haxelib remove hxvlc || true
           haxelib install hxvlc 1.5.4
           haxelib set hxvlc 1.5.4
 
-      - name: Install hxcpp
+      - name: Verify Android environment
         run: |
-          haxelib remove hxcpp || true
-          haxelib install hxcpp
+          echo "========== ANDROID SDK =========="
+          echo "$ANDROID_SDK"
+
+          echo "========== ANDROID NDK =========="
+          echo "$ANDROID_NDK_ROOT"
+
+          echo "========== JAVA =========="
+          echo "$JAVA_HOME"
+
+          echo "========== NDK VERSION =========="
+          cat "$ANDROID_NDK_ROOT/source.properties"
+
+          echo "========== LIME =========="
+          haxelib path lime
+
+          echo "========== HXCPP =========="
+          haxelib path hxcpp
 
       - name: Setup Lime
         run: |
@@ -86,36 +122,31 @@ jobs:
         run: |
           haxelib run lime setup android
 
-      - name: Rebuild Lime
+      - name: Verify Lime Android
         run: |
-          haxelib run lime rebuild cpp
+          echo "ANDROID_SDK=$ANDROID_SDK"
+          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_ROOT"
 
-      - name: Check libraries
-        run: |
-          echo "Haxe:"
-          haxe --version
+          haxelib run lime config ANDROID_SDK "$ANDROID_SDK"
+          haxelib run lime config ANDROID_NDK_ROOT "$ANDROID_NDK_ROOT"
 
-          echo "Haxelib:"
-          haxelib list
-
-          echo "Lime:"
-          haxelib path lime
-
-          echo "HXCPP:"
-          haxelib path hxcpp
-
-      - name: Clean
+      - name: Clean build
         run: |
           rm -rf export
           rm -rf build
 
-      - name: Build Android
+      - name: Build Android APK
         run: |
+          export ANDROID_SDK="$ANDROID_SDK_ROOT"
+          export ANDROID_HOME="$ANDROID_SDK_ROOT"
+          export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
+
           haxelib run lime build android -release -D HXCPP_IGNORE_WARNINGS
 
       - name: Find APK
         if: always()
         run: |
+          echo "========== APK FILES =========="
           find . -type f -name "*.apk" -print
 
       - name: Upload APK
