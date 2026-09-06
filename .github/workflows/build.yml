@@ -9,11 +9,11 @@ on:
 
 jobs:
   build-android:
-    name: Build APK
+    name: Build TwiddleFinger APK
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Java 17
@@ -27,10 +27,10 @@ jobs:
         with:
           haxe-version: "4.3.5"
 
-      - name: Setup Android SDK
+      - name: Setup Android
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK packages
+      - name: Install Android SDK
         run: |
           yes | sdkmanager --licenses || true
           sdkmanager "platform-tools"
@@ -41,6 +41,17 @@ jobs:
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: r25c
+
+      - name: Configure environment
+        run: |
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
+          echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+
+          echo "CPPFLAGS=-DANDROID" >> "$GITHUB_ENV"
+          echo "CXXFLAGS=-stdlib=libc++" >> "$GITHUB_ENV"
+          echo "LDFLAGS=-stdlib=libc++" >> "$GITHUB_ENV"
 
       - name: Setup Haxelib
         run: |
@@ -60,7 +71,7 @@ jobs:
         run: |
           haxelib install hmm
 
-      - name: Install project dependencies
+      - name: Install dependencies
         run: |
           if [ -f hmm.json ]; then
             haxelib run hmm install
@@ -78,101 +89,39 @@ jobs:
           haxelib install hxvlc 1.5.4
           haxelib set hxvlc 1.5.4
 
-      - name: Verify Haxe and Haxelib
-        run: |
-          echo "========== HAXE =========="
-          haxe --version
-
-          echo "========== HAXELIB =========="
-          haxelib list
-
-          echo "========== LIME =========="
-          haxelib path lime
-
-          echo "========== OPENFL =========="
-          haxelib path openfl
-
-          echo "========== HXCPP =========="
-          haxelib path hxcpp
-
-          echo "========== FLIXEL =========="
-          haxelib path flixel
-
-          echo "========== HXVLC =========="
-          haxelib path hxvlc
-
       - name: Setup Lime
         run: |
           haxelib run lime setup
-
-      - name: Setup Lime Android
-        run: |
           haxelib run lime setup android
 
-      - name: Configure Android environment
+      - name: Check NDK
         run: |
-          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
-          echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
-
-          if [ -n "$ANDROID_NDK_HOME" ]; then
-            echo "ANDROID_NDK_ROOT=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
-          fi
-
-      - name: Debug C++ Android
-        run: |
-          echo "========== ANDROID ENVIRONMENT =========="
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
           echo "ANDROID_NDK_ROOT=$ANDROID_NDK_ROOT"
-          echo "JAVA_HOME=$JAVA_HOME"
 
-          echo "========== NDK VERSION =========="
-          if [ -n "$ANDROID_NDK_HOME" ]; then
-            cat "$ANDROID_NDK_HOME/source.properties" || true
-          fi
+          cat "$ANDROID_NDK_HOME/source.properties"
 
-          echo "========== CLANG VERSION =========="
-          if [ -f "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++" ]; then
-            "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++" --version
-          else
-            echo "clang++ não encontrado no caminho esperado"
-          fi
+          echo "===== CLANG ====="
+          "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++" --version
 
-          echo "========== TYPEINFO HEADERS =========="
-          find "$ANDROID_NDK_HOME" -name "typeinfo" -print | head -20 || true
+          echo "===== TYPEINFO ====="
+          find "$ANDROID_NDK_HOME" -name typeinfo -print | head -20
 
-          echo "========== C++ INCLUDE DIRECTORIES =========="
-          find "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64" \
-            -type d -name "include" -print | head -30 || true
-
-          echo "========== HXCPP =========="
-          haxelib path hxcpp
-
-      - name: Check Android tools
-        run: |
-          echo "========== ADB =========="
-          adb version || true
-
-          echo "========== SDKMANAGER =========="
-          sdkmanager --version || true
-
-          echo "========== NDK DIRECTORY =========="
-          ls -la "$ANDROID_NDK_HOME" || true
-
-      - name: Clean build
+      - name: Clean
         run: |
           rm -rf export
           rm -rf build
 
-      - name: Build Android APK
+      - name: Build Android
+        env:
+          HXCPP_NO_PCH: "1"
         run: |
           haxelib run lime build android -release -D HXCPP_IGNORE_WARNINGS
 
       - name: Find APK
         if: always()
         run: |
-          echo "========== APK FILES =========="
+          echo "===== APK ====="
           find . -type f -name "*.apk" -print
 
       - name: Upload APK
