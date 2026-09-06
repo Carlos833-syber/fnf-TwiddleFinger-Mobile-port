@@ -8,15 +8,26 @@ on:
       - master
 
 jobs:
-  build-android:
-    name: Build TwiddleFinger APK
+  build:
+    name: Build Android APK
     runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      - name: Install system C++ tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            gcc \
+            g++ \
+            clang \
+            libc++-dev \
+            libc++abi-dev
+
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -27,10 +38,10 @@ jobs:
         with:
           haxe-version: "4.3.5"
 
-      - name: Setup Android
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK
+      - name: Install Android SDK packages
         run: |
           yes | sdkmanager --licenses || true
           sdkmanager "platform-tools"
@@ -42,16 +53,12 @@ jobs:
         with:
           ndk-version: r25c
 
-      - name: Configure environment
+      - name: Configure Android
         run: |
           echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROID_SDK=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_ROOT=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
           echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
-
-          echo "CPPFLAGS=-DANDROID" >> "$GITHUB_ENV"
-          echo "CXXFLAGS=-stdlib=libc++" >> "$GITHUB_ENV"
-          echo "LDFLAGS=-stdlib=libc++" >> "$GITHUB_ENV"
 
       - name: Setup Haxelib
         run: |
@@ -71,19 +78,19 @@ jobs:
         run: |
           haxelib install hmm
 
-      - name: Install dependencies
+      - name: Install project libraries
         run: |
           if [ -f hmm.json ]; then
             haxelib run hmm install
           fi
 
-      - name: Install Flixel 5.8.0
+      - name: Force Flixel 5.8.0
         run: |
           haxelib remove flixel || true
           haxelib install flixel 5.8.0
           haxelib set flixel 5.8.0
 
-      - name: Install hxvlc 1.5.4
+      - name: Force hxvlc 1.5.4
         run: |
           haxelib remove hxvlc || true
           haxelib install hxvlc 1.5.4
@@ -94,34 +101,47 @@ jobs:
           haxelib run lime setup
           haxelib run lime setup android
 
-      - name: Check NDK
+      - name: Configure C++ compiler
         run: |
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
-          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_ROOT"
+          echo "CXX=clang++" >> "$GITHUB_ENV"
+          echo "CC=clang" >> "$GITHUB_ENV"
+          echo "CXXFLAGS=-stdlib=libc++" >> "$GITHUB_ENV"
+          echo "CPPFLAGS=-DANDROID" >> "$GITHUB_ENV"
 
-          cat "$ANDROID_NDK_HOME/source.properties"
+      - name: Verify C++ environment
+        run: |
+          echo "===== GCC ====="
+          g++ --version
 
           echo "===== CLANG ====="
+          clang++ --version
+
+          echo "===== LIBC++ ====="
+          ls -la /usr/include/c++/v1/typeinfo || true
+
+          echo "===== NDK ====="
+          echo "$ANDROID_NDK_HOME"
+          cat "$ANDROID_NDK_HOME/source.properties"
+
+          echo "===== NDK CLANG ====="
           "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++" --version
 
-          echo "===== TYPEINFO ====="
-          find "$ANDROID_NDK_HOME" -name typeinfo -print | head -20
+          echo "===== HXCPP ====="
+          haxelib path hxcpp
 
       - name: Clean
         run: |
           rm -rf export
           rm -rf build
 
-      - name: Build Android
-        env:
-          HXCPP_NO_PCH: "1"
+      - name: Build Android APK
         run: |
           haxelib run lime build android -release -D HXCPP_IGNORE_WARNINGS
 
       - name: Find APK
         if: always()
         run: |
-          echo "===== APK ====="
+          echo "===== APK FILES ====="
           find . -type f -name "*.apk" -print
 
       - name: Upload APK
