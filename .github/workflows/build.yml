@@ -13,134 +13,147 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      # ==============================
-      # Código
-      # ==============================
-      - name: Checkout
+
+      # =========================
+      # Checkout
+      # =========================
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ==============================
-      # Java
-      # ==============================
+      # =========================
+      # Java 17
+      # =========================
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      # ==============================
+      # =========================
       # Haxe
-      # ==============================
-      - name: Setup Haxe
+      # =========================
+      - name: Setup Haxe 4.3.5
         uses: krdlab/setup-haxe@v1
         with:
           haxe-version: "4.3.5"
 
-      # ==============================
+      # =========================
       # Android SDK
-      # ==============================
+      # =========================
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK
+      - name: Install Android SDK packages
         run: |
           yes | sdkmanager --licenses || true
+
           sdkmanager "platform-tools"
           sdkmanager "platforms;android-34"
           sdkmanager "build-tools;34.0.0"
 
-      # ==============================
+      # =========================
       # Android NDK
-      # ==============================
+      # =========================
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: r21e
 
-      # ==============================
+      # =========================
       # Haxelib
-      # ==============================
+      # =========================
       - name: Setup Haxelib
         run: |
           haxelib setup ~/haxelib
 
-      # ==============================
-      # Lime PRIMEIRO
-      # ==============================
+      # =========================
+      # Lime
+      # =========================
       - name: Install Lime
         run: |
           haxelib install lime
           haxelib set lime latest
-          haxelib list
 
-      # ==============================
+      # =========================
       # OpenFL
-      # ==============================
+      # =========================
       - name: Install OpenFL
         run: |
           haxelib install openfl
           haxelib set openfl latest
 
-      # ==============================
+      # =========================
       # HMM
-      # ==============================
+      # =========================
       - name: Install HMM
         run: |
           haxelib install hmm
-          haxelib run hmm install
 
-      # ==============================
+      # =========================
+      # Projeto
+      # =========================
+      - name: Install project dependencies
+        run: |
+          if [ -f hmm.json ]; then
+            haxelib run hmm install
+          fi
+
+      # =========================
       # Flixel 5.8.0
-      # ==============================
+      # =========================
       - name: Install Flixel 5.8.0
         run: |
           haxelib remove flixel || true
           haxelib install flixel 5.8.0
           haxelib set flixel 5.8.0
 
-      # ==============================
+      # =========================
       # hxvlc 1.5.4
-      # ==============================
+      # =========================
       - name: Install hxvlc 1.5.4
         run: |
           haxelib remove hxvlc || true
           haxelib install hxvlc 1.5.4
           haxelib set hxvlc 1.5.4
 
-      # ==============================
-      # Verificar bibliotecas
-      # ==============================
-      - name: Verify libraries
+      # =========================
+      # Verificar dependências
+      # =========================
+      - name: Verify Haxelib
         run: |
-          echo "===== HAXE ====="
+          echo "========== HAXE =========="
           haxe --version
 
-          echo "===== HAXELIB ====="
+          echo "========== HAXELIB =========="
           haxelib list
 
-          echo "===== LIME ====="
+          echo "========== LIME =========="
           haxelib path lime
 
-          echo "===== OPENFL ====="
+          echo "========== OPENFL =========="
           haxelib path openfl
 
-          echo "===== FLIXEL ====="
+          echo "========== FLIXEL =========="
           haxelib path flixel
 
-          echo "===== HXVLC ====="
+          echo "========== HXVLC =========="
           haxelib path hxvlc
 
-      # ==============================
-      # Lime Android
-      # ==============================
+      # =========================
+      # Configurar Lime
+      # =========================
+      - name: Setup Lime
+        run: |
+          haxelib run lime setup
+
       - name: Setup Lime Android
         run: |
           haxelib run lime setup android
 
-      # ==============================
-      # Configurar Android
-      # ==============================
-      - name: Configure Android
+      # =========================
+      # Android environment
+      # =========================
+      - name: Configure Android environment
         run: |
           echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROID_SDK=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
@@ -150,33 +163,44 @@ jobs:
             echo "ANDROID_NDK_ROOT=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
           fi
 
-      # ==============================
-      # Limpar SOMENTE export/build
-      # NÃO apagar .haxelib
-      # ==============================
+      # =========================
+      # Mostrar ambiente
+      # =========================
+      - name: Check Android environment
+        run: |
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+          echo "JAVA_HOME=$JAVA_HOME"
+
+          adb version || true
+
+      # =========================
+      # Limpar build
+      # =========================
       - name: Clean build
         run: |
           rm -rf export
           rm -rf build
 
-      # ==============================
-      # BUILD
-      # ==============================
+      # =========================
+      # Compilar APK
+      # =========================
       - name: Build Android APK
         run: |
           haxelib run lime build android -release -D HXCPP_IGNORE_WARNINGS
 
-      # ==============================
+      # =========================
       # Procurar APK
-      # ==============================
+      # =========================
       - name: Find APK
+        if: always()
         run: |
-          echo "===== APK GERADO ====="
+          echo "========== APK FILES =========="
           find . -type f -name "*.apk" -print
 
-      # ==============================
-      # Enviar APK
-      # ==============================
+      # =========================
+      # Upload APK
+      # =========================
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
