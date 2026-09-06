@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   build:
+    name: Build Android APK
     runs-on: ubuntu-22.04
 
     steps:
@@ -29,7 +30,7 @@ jobs:
         with:
           haxe-version: "4.3.5"
 
-      - name: Setup Android
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Install Android SDK
@@ -39,17 +40,20 @@ jobs:
           sdkmanager "platforms;android-34"
           sdkmanager "build-tools;34.0.0"
 
-      - name: Setup NDK
+      - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: r25c
 
-      - name: Configure Android
+      - name: Configure Android environment
         run: |
           echo "ANDROID_SDK=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_ROOT=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
+
+          echo "ANDROID_SDK=$ANDROID_SDK_ROOT"
+          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_HOME"
 
       - name: Setup Haxelib
         run: |
@@ -59,44 +63,79 @@ jobs:
         run: |
           haxelib install hmm
 
-      - name: Install dependencies
+      - name: Install project dependencies
         run: |
           haxelib run hmm install
 
-      - name: Install Lime
+      - name: Reinstall Lime
         run: |
           haxelib remove lime || true
           haxelib install lime
+
+          echo "===== LIME ====="
+          haxelib path lime
 
       - name: Install OpenFL
         run: |
           haxelib remove openfl || true
           haxelib install openfl
 
+          echo "===== OPENFL ====="
+          haxelib path openfl
+
       - name: Install hxcpp 4.3.45
         run: |
-          wget -O /tmp/hxcpp.zip https://github.com/HaxeFoundation/hxcpp/releases/download/v4.3.45/hxcpp-4.3.45.zip
-          haxelib install /tmp/hxcpp.zip --quiet
+          wget -O /tmp/hxcpp-4.3.45.zip \
+            https://github.com/HaxeFoundation/hxcpp/releases/download/v4.3.45/hxcpp-4.3.45.zip
+
+          haxelib install /tmp/hxcpp-4.3.45.zip --quiet
           haxelib set hxcpp 4.3.45
 
-      - name: Install Flixel
+          echo "===== HXCPP ====="
+          haxelib path hxcpp
+
+      - name: Install Flixel 5.8.0
         run: |
           haxelib remove flixel || true
           haxelib install flixel 5.8.0
           haxelib set flixel 5.8.0
 
-      - name: Install hxvlc
+      - name: Install hxvlc 1.5.4
         run: |
           haxelib remove hxvlc || true
           haxelib install hxvlc 1.5.4
           haxelib set hxvlc 1.5.4
+
+      - name: Verify Android
+        run: |
+          echo "===== SDK ====="
+          echo "$ANDROID_SDK"
+
+          echo "===== NDK ====="
+          echo "$ANDROID_NDK_ROOT"
+
+          echo "===== NDK VERSION ====="
+          cat "$ANDROID_NDK_ROOT/source.properties"
+
+          echo "===== JAVA ====="
+          echo "$JAVA_HOME"
+
+      - name: Verify Lime
+        run: |
+          echo "===== LIME PATH ====="
+          haxelib path lime
+
+          echo "===== LIME NDLL ====="
+          find "$HOME/haxelib/lime" \
+            -name "lime.ndll" \
+            -print || true
 
       - name: Setup Lime
         run: |
           haxelib run lime setup
           haxelib run lime setup android
 
-      - name: Configure Lime
+      - name: Configure Lime Android
         run: |
           haxelib run lime config ANDROID_SDK "$ANDROID_SDK_ROOT"
           haxelib run lime config ANDROID_NDK_ROOT "$ANDROID_NDK_HOME"
@@ -107,21 +146,155 @@ jobs:
           rm -rf build
 
       - name: Build APK
+        id: build_apk
+        continue-on-error: true
         run: |
           export ANDROID_SDK="$ANDROID_SDK_ROOT"
           export ANDROID_HOME="$ANDROID_SDK_ROOT"
           export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
+
+          echo "===== ANDROID ENVIRONMENT ====="
+          echo "ANDROID_SDK=$ANDROID_SDK"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_ROOT"
+
+          echo "===== BUILD ====="
+
           haxelib run lime build android -release -D HXCPP_IGNORE_WARNINGS
+
+      - name: Inspect AndroidManifest
+        if: steps.build_apk.outcome == 'failure'
+        run: |
+          echo "========================================"
+          echo "PROCURANDO ANDROIDMANIFEST.XML"
+          echo "========================================"
+
+          find export \
+            -name "AndroidManifest.xml" \
+            -print 2>/dev/null || true
+
+          echo ""
+          echo "========================================"
+          echo "MANIFESTO GERADO"
+          echo "========================================"
+
+          MANIFEST="export/release/android/bin/app/src/main/AndroidManifest.xml"
+
+          if [ -f "$MANIFEST" ]; then
+
+            echo "Arquivo encontrado:"
+            echo "$MANIFEST"
+
+            echo ""
+            echo "========== CONTEÚDO =========="
+
+            nl -ba "$MANIFEST"
+
+            echo ""
+            echo "========== VALIDAÇÃO XML =========="
+
+            python3 - "$MANIFEST" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+
+manifest = sys.argv[1]
+
+print("Verificando:", manifest)
+
+try:
+    ET.parse(manifest)
+    print("XML VALIDO")
+except Exception as error:
+    print("XML INVALIDO")
+    print("ERRO:")
+    print(error)
+PY
+
+          else
+
+            echo "O manifesto esperado não foi encontrado."
+
+            echo ""
+            echo "Tentando encontrar qualquer manifesto:"
+
+            find . \
+              -name "AndroidManifest.xml" \
+              -print 2>/dev/null || true
+
+          fi
+
+      - name: Inspect Android project
+        if: steps.build_apk.outcome == 'failure'
+        run: |
+          echo "========================================"
+          echo "ARQUIVOS DO PROJETO ANDROID"
+          echo "========================================"
+
+          if [ -d "export/release/android/bin/app" ]; then
+            find export/release/android/bin/app \
+              -maxdepth 5 \
+              -type f \
+              -print 2>/dev/null | head -300
+          else
+            echo "Pasta do projeto Android não encontrada."
+          fi
+
+      - name: Find Gradle manifest reports
+        if: steps.build_apk.outcome == 'failure'
+        run: |
+          echo "========================================"
+          echo "RELATÓRIOS DO MANIFEST MERGER"
+          echo "========================================"
+
+          find export/release/android \
+            -type f \
+            \( \
+              -name "*manifest*report*" \
+              -o \
+              -name "manifest-merger-*.txt" \
+              -o \
+              -name "manifest-merger-*.xml" \
+            \) \
+            -print 2>/dev/null || true
 
       - name: Find APK
         if: always()
         run: |
-          find . -type f -name "*.apk" -print
+          echo "========================================"
+          echo "APK"
+          echo "========================================"
+
+          find . \
+            -type f \
+            -name "*.apk" \
+            -print 2>/dev/null || true
+
+      - name: Upload diagnostics
+        if: steps.build_apk.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: TwiddleFinger-Android-Diagnostics
+          path: |
+            export/release/android/**/*.xml
+            export/release/android/**/*.txt
+            export/release/android/**/*.log
+          if-no-files-found: ignore
+
+      - name: Stop if build failed
+        if: steps.build_apk.outcome == 'failure'
+        run: |
+          echo "========================================"
+          echo "BUILD FALHOU"
+          echo "========================================"
+          exit 1
 
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: TwiddleFinger-Android-APK
-          path: export/**/*.apk
+          path: |
+            export/**/*.apk
+            export/**/**/*.apk
+            export/**/**/**/*.apk
           if-no-files-found: error
