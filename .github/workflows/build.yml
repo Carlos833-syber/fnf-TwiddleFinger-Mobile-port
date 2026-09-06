@@ -8,15 +8,15 @@ on:
       - master
 
 jobs:
-  build:
-    name: Build Android APK
+  build-android:
+    name: Build APK
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install system C++ tools
+      - name: Install C++ tools
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -27,7 +27,7 @@ jobs:
             libc++-dev \
             libc++abi-dev
 
-      - name: Setup Java
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -41,7 +41,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK packages
+      - name: Install Android SDK
         run: |
           yes | sdkmanager --licenses || true
           sdkmanager "platform-tools"
@@ -53,7 +53,7 @@ jobs:
         with:
           ndk-version: r25c
 
-      - name: Configure Android
+      - name: Configure Android environment
         run: |
           echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROID_SDK=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
@@ -66,23 +66,33 @@ jobs:
 
       - name: Install Lime
         run: |
+          haxelib remove lime || true
           haxelib install lime
-          haxelib set lime latest
+          echo "========== LIME =========="
+          haxelib list | grep lime || true
+          haxelib path lime
 
       - name: Install OpenFL
         run: |
+          haxelib remove openfl || true
           haxelib install openfl
-          haxelib set openfl latest
+          haxelib path openfl
 
       - name: Install HMM
         run: |
           haxelib install hmm
 
-      - name: Install project libraries
+      - name: Install project dependencies
         run: |
-          if [ -f hmm.json ]; then
-            haxelib run hmm install
-          fi
+          haxelib run hmm install
+
+      - name: Fix hxcpp
+        run: |
+          haxelib remove hxcpp || true
+          haxelib install hxcpp
+          echo "========== HXCPP =========="
+          haxelib list | grep hxcpp || true
+          haxelib path hxcpp
 
       - name: Force Flixel 5.8.0
         run: |
@@ -90,46 +100,48 @@ jobs:
           haxelib install flixel 5.8.0
           haxelib set flixel 5.8.0
 
-      - name: Force hxvlc 1.5.4
+      - name: Install hxvlc 1.5.4
         run: |
           haxelib remove hxvlc || true
           haxelib install hxvlc 1.5.4
           haxelib set hxvlc 1.5.4
 
-      - name: Setup Lime
+      - name: Rebuild Lime native library
         run: |
-          haxelib run lime setup
+          echo "========== REBUILD LIME =========="
+          haxelib run lime rebuild cpp
+
+      - name: Setup Lime Android
+        run: |
           haxelib run lime setup android
 
-      - name: Configure C++ compiler
+      - name: Check Lime NDLL
         run: |
-          echo "CXX=clang++" >> "$GITHUB_ENV"
-          echo "CC=clang" >> "$GITHUB_ENV"
-          echo "CXXFLAGS=-stdlib=libc++" >> "$GITHUB_ENV"
-          echo "CPPFLAGS=-DANDROID" >> "$GITHUB_ENV"
+          echo "========== LIME NDLL =========="
+          find ~/.haxelib -name "lime.ndll" -print || true
+          find .haxelib -name "lime.ndll" -print || true
 
-      - name: Verify C++ environment
+      - name: Check environment
         run: |
-          echo "===== GCC ====="
-          g++ --version
+          echo "========== HAXE =========="
+          haxe --version
 
-          echo "===== CLANG ====="
-          clang++ --version
+          echo "========== HAXELIB =========="
+          haxelib list
 
-          echo "===== LIBC++ ====="
-          ls -la /usr/include/c++/v1/typeinfo || true
+          echo "========== LIME =========="
+          haxelib path lime
 
-          echo "===== NDK ====="
-          echo "$ANDROID_NDK_HOME"
-          cat "$ANDROID_NDK_HOME/source.properties"
-
-          echo "===== NDK CLANG ====="
-          "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++" --version
-
-          echo "===== HXCPP ====="
+          echo "========== HXCPP =========="
           haxelib path hxcpp
 
-      - name: Clean
+          echo "========== NDK =========="
+          cat "$ANDROID_NDK_HOME/source.properties"
+
+          echo "========== CLANG =========="
+          clang++ --version
+
+      - name: Clean build
         run: |
           rm -rf export
           rm -rf build
@@ -139,17 +151,4 @@ jobs:
           haxelib run lime build android -release -D HXCPP_IGNORE_WARNINGS
 
       - name: Find APK
-        if: always()
-        run: |
-          echo "===== APK FILES ====="
-          find . -type f -name "*.apk" -print
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: TwiddleFinger-Android-APK
-          path: |
-            export/**/*.apk
-            export/**/**/*.apk
-            export/**/**/**/*.apk
-          if-no-files-found: error
+       
