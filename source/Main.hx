@@ -1,8 +1,8 @@
 package;
 
 import states.MaxMenu;
-#if android
-import android.content.Context;
+#if mobile
+Sys.setCwd(lime.system.System.applicationStorageDirectory);
 #end
 
 import debug.FPSCounter;
