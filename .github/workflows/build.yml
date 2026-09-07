@@ -9,76 +9,67 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-
-      - name: Baixar projeto
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Java 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Instalar Haxe
+      - name: Setup Haxe
         uses: krdlab/setup-haxe@v1
         with:
           haxe-version: '4.3.5'
 
-      - name: Configurar Android SDK
+      - name: Setup Android
         uses: android-actions/setup-android@v3
 
-      - name: Instalar Android SDK e NDK
+      - name: Install Android SDK
         run: |
           sdkmanager "platform-tools"
           sdkmanager "platforms;android-35"
           sdkmanager "build-tools;35.0.0"
           sdkmanager "ndk;25.2.9519653"
 
-      - name: Configurar variáveis Android
+      - name: Android variables
         run: |
           echo "ANDROID_SDK=$ANDROID_HOME" >> "$GITHUB_ENV"
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/25.2.9519653" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.2.9519653" >> "$GITHUB_ENV"
 
-      - name: Configurar Haxelib
+      - name: Setup Haxelib
         run: |
           mkdir -p "$HOME/haxelib"
           haxelib setup "$HOME/haxelib"
 
-      - name: Instalar HMM
+      - name: Install HMM
         run: |
           haxelib install hmm
           haxelib run hmm install
 
-      - name: Forçar Flixel 5.8.0
+      - name: Force Flixel 5.8.0
         run: |
-          echo "Removendo versões antigas do Flixel..."
           haxelib remove flixel || true
           rm -rf .haxelib/flixel
-
-          echo "Instalando Flixel 5.8.0..."
           haxelib install flixel 5.8.0
-
-          echo "Verificando Flixel..."
           test -d ".haxelib/flixel/5,8,0"
 
-          echo "Flixel instalado:"
-          haxelib path flixel
-
-      - name: Instalar HXVLС 1.5.4
+      - name: Install HXVLС
         run: |
           haxelib install hxvlc 1.5.4
 
-      - name: Instalar Lime 8.3.2
+      - name: Install Lime
         run: |
           haxelib install lime 8.3.2
 
-      - name: Instalar OpenFL
+      - name: Install OpenFL
         run: |
           haxelib install openfl
 
-      - name: Instalar HXCPP atualizado
+      - name: Install HXCPP
         run: |
           rm -rf /tmp/hxcpp
 
@@ -86,210 +77,101 @@ jobs:
             https://github.com/HaxeFoundation/hxcpp.git \
             /tmp/hxcpp
 
-          echo "HXCPP baixado."
-
           cd /tmp/hxcpp/tools/hxcpp
 
-          echo "Compilando ferramenta do HXCPP..."
           haxe compile.hxml
 
           cd "$GITHUB_WORKSPACE"
 
-          echo "Registrando HXCPP..."
           haxelib dev hxcpp /tmp/hxcpp
 
-          echo "HXCPP:"
-          haxelib path hxcpp
-
-      - name: Configurar Lime
+      - name: Setup Lime
         run: |
           haxelib run lime setup
 
-      - name: Corrigir Flixel 5.8.0
+      - name: Fix Flixel Android
         run: |
           FLIXEL=".haxelib/flixel/5,8,0/include.xml"
 
           if [ ! -f "$FLIXEL" ]; then
-            echo "ERRO: include.xml do Flixel não encontrado!"
-            find .haxelib -maxdepth 4 -name include.xml -print
+            echo "Flixel include.xml not found"
             exit 1
           fi
 
-          echo "Flixel encontrado:"
-          echo "$FLIXEL"
-
-          echo ""
-          echo "Antes da correção:"
-          grep -n "lime" "$FLIXEL" || true
-
-          # Remove a condição problemática usada no AndroidManifest
           sed -i 's/if="lime &ge; 8\.2\.0"//g' "$FLIXEL"
-
-          # Remove variante com >=
           sed -i 's/if="lime >= 8\.2\.0"//g' "$FLIXEL"
-
-          # Remove variante escapada
           sed -i 's/if="lime &amp;ge; 8\.2\.0"//g' "$FLIXEL"
 
-          echo ""
-          echo "Depois da correção:"
-          grep -n "lime" "$FLIXEL" || true
+          echo "Flixel include.xml:"
+          cat "$FLIXEL"
 
-      - name: Configurar Android Lime
+      - name: Setup Android Lime
         run: |
           haxelib run lime setup android
 
-      - name: Limpar arquivos antigos
+      - name: Clean
         run: |
           rm -rf export
           rm -rf .lime
 
-      - name: Verificar bibliotecas
+      - name: Check libraries
         run: |
-          echo "======================================"
-          echo "FLIXEL"
-          echo "======================================"
+          echo "FLIXEL:"
           haxelib path flixel
 
-          echo ""
-          echo "======================================"
-          echo "LIME"
-          echo "======================================"
+          echo "LIME:"
           haxelib path lime
 
-          echo ""
-          echo "======================================"
-          echo "OPENFL"
-          echo "======================================"
+          echo "OPENFL:"
           haxelib path openfl
 
-          echo ""
-          echo "======================================"
-          echo "HXCPP"
-          echo "======================================"
+          echo "HXCPP:"
           haxelib path hxcpp
 
-          echo ""
-          echo "======================================"
-          echo "HXVLC"
-          echo "======================================"
+          echo "HXVLC:"
           haxelib path hxvlc
 
-      - name: Compilar TwiddleFinger
+      - name: Build Android
         run: |
           set +e
 
-          echo ""
           echo "======================================"
           echo "COMPILANDO TWIDDLEFINGER"
           echo "======================================"
-          echo ""
 
           haxelib run lime build android -release
 
           STATUS=$?
 
-          echo ""
           echo "======================================"
-          echo "RESULTADO DA COMPILAÇÃO"
-          echo "======================================"
-          echo "Código: $STATUS"
-
-          echo ""
-          echo "======================================"
-          echo "ANDROIDMANIFEST"
+          echo "BUILD STATUS: $STATUS"
           echo "======================================"
 
-          MANIFEST="export/release/android/bin/app/src/main/AndroidManifest.xml"
-
-          if [ -f "$MANIFEST" ]; then
-
-            echo ""
-            echo "Manifest encontrado:"
-            echo "$MANIFEST"
-
-            echo ""
+          if [ -f "export/release/android/bin/app/src/main/AndroidManifest.xml" ]; then
             echo "======================================"
-            echo "MANIFEST COM NÚMEROS DE LINHA"
+            echo "ANDROID MANIFEST"
             echo "======================================"
 
-            nl -ba "$MANIFEST"
+            nl -ba export/release/android/bin/app/src/main/AndroidManifest.xml
 
-            echo ""
             echo "======================================"
-            echo "VALIDANDO XML"
+            echo "CHECKING MANIFEST"
             echo "======================================"
 
-            python3 - "$MANIFEST" <<'PY'
-import sys
-import xml.etree.ElementTree as ET
-
-path = sys.argv[1]
-
-try:
-    ET.parse(path)
-
-    print("")
-    print("======================================")
-    print("XML VALIDO")
-    print("======================================")
-
-except Exception as e:
-
-    print("")
-    print("======================================")
-    print("XML INVALIDO")
-    print("======================================")
-
-    print(e)
-
-    print("")
-    print("======================================")
-    print("CONTEUDO DO MANIFEST")
-    print("======================================")
-
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-
-        for i, line in enumerate(lines, 1):
-            print(f"{i}: {line.rstrip()}")
-
-    except Exception as read_error:
-        print("Erro lendo Manifest:")
-        print(read_error)
-PY
-
+            python3 -c "import xml.etree.ElementTree as ET; ET.parse('export/release/android/bin/app/src/main/AndroidManifest.xml'); print('MANIFEST XML OK')" || true
           else
-
-            echo ""
-            echo "Manifest não encontrado."
-
-            echo ""
-            echo "Procurando outros AndroidManifest.xml:"
-            find export -name "AndroidManifest.xml" -print 2>/dev/null || true
-
+            echo "AndroidManifest.xml not found"
           fi
-
-          echo ""
-          echo "======================================"
-          echo "FIM DO DIAGNÓSTICO"
-          echo "======================================"
 
           exit $STATUS
 
-      - name: Procurar APK
+      - name: Find APK
         if: success()
         run: |
-          echo "======================================"
-          echo "APK GERADO"
-          echo "======================================"
+          echo "Generated files:"
+          find export -type f \( -name "*.apk" -o -name "*.aab" \) -print
 
-          find export -type f \
-            \( -name "*.apk" -o -name "*.aab" \) \
-            -print
-
-      - name: Enviar APK
+      - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
