@@ -3,385 +3,197 @@ name: Build TwiddleFinger Android
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
-      - master
 
 jobs:
   build-android:
     runs-on: ubuntu-22.04
 
     steps:
-
-      # ==========================================
-      # CHECKOUT
-      # ==========================================
       - name: Checkout
         uses: actions/checkout@v4
 
-
-      # ==========================================
-      # JAVA
-      # ==========================================
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-
-      # ==========================================
-      # HAXE
-      # ==========================================
       - name: Setup Haxe
-        uses: krdlab/setup-haxe@master
+        uses: krdlab/setup-haxe@v1
         with:
           haxe-version: '4.3.5'
 
-
-      # ==========================================
-      # ANDROID
-      # ==========================================
-      - name: Setup Android
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK
+      - name: Install Android SDK packages
         run: |
-          sdkmanager --sdk_root="$ANDROID_SDK_ROOT" \
+          sdkmanager --install \
             "platform-tools" \
-            "platforms;android-34" \
-            "build-tools;34.0.0" \
-            "ndk;25.2.9519653"
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
-          echo "ANDROID_SDK=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
-          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> "$GITHUB_ENV"
+      - name: Install Android NDK
+        run: |
+          sdkmanager --install "ndk;25.2.9519653"
 
+      - name: Configure Android environment
+        run: |
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "ANDROID_SDK=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> $GITHUB_ENV
 
-      # ==========================================
-      # HAXELIB
-      # ==========================================
-      - name: Setup Haxelib
+      - name: Install Haxelib dependencies
         run: |
           haxelib setup ~/haxelib
 
-
-      # ==========================================
-      # HMM
-      # ==========================================
-      - name: Install HMM dependencies
-        run: |
           haxelib install hmm --quiet
-          haxelib run hmm install
 
+          if [ -f hmm.json ]; then
+            haxelib run hmm install
+          fi
 
-      # ==========================================
-      # LIME
-      # ==========================================
-      - name: Install Lime
+      - name: Install exact Flixel 5.8.0
+        run: |
+          haxelib install flixel 5.8.0 --quiet
+
+          echo "=== Flixel path ==="
+          haxelib path flixel
+
+      - name: Install Lime 8.3.2
         run: |
           haxelib remove lime || true
           haxelib install lime 8.3.2 --quiet
 
-
-      # ==========================================
-      # OPENFL
-      # ==========================================
       - name: Install OpenFL
         run: |
-          haxelib remove openfl || true
           haxelib install openfl --quiet
 
-
-      # ==========================================
-      # HXCPP
-      # ==========================================
       - name: Install hxcpp
         run: |
-          curl -L \
-            -o /tmp/hxcpp.zip \
-            https://github.com/HaxeFoundation/hxcpp/releases/download/v4.3.45/hxcpp-4.3.45.zip
+          rm -rf .haxelib/hxcpp
 
-          haxelib remove hxcpp || true
-          haxelib install /tmp/hxcpp.zip --quiet
+          git clone --depth 1 \
+            https://github.com/HaxeFoundation/hxcpp.git \
+            /tmp/hxcpp
 
+          cd /tmp/hxcpp
 
-      # ==========================================
-      # FLIXEL
-      # ==========================================
-      - name: Install Flixel 5.8.0
+          git fetch --tags --depth 1 || true
+
+          git checkout 4.3.45 2>/dev/null || true
+
+          cd "$GITHUB_WORKSPACE"
+
+          haxelib dev hxcpp /tmp/hxcpp
+
+          echo "=== hxcpp ==="
+          haxelib path hxcpp
+
+      - name: Install Lime native files
         run: |
-          haxelib remove flixel || true
-          haxelib install flixel 5.8.0 --quiet
+          haxelib run lime setup
 
-
-      # ==========================================
-      # HXVLС
-      # ==========================================
-      - name: Install hxvlc
+      - name: Fix Flixel Android Manifest condition
+        shell: bash
         run: |
-          haxelib remove hxvlc || true
-          haxelib install hxvlc 1.5.4 --quiet
+          set -e
 
+          echo "======================================"
+          echo "Procurando include.xml do Flixel"
+          echo "======================================"
 
-      # ==========================================
-      # VERIFICAR DEPENDÊNCIAS
-      # ==========================================
-      - name: Check dependencies
-        run: |
-          echo "=============================="
-          echo "HAXE"
-          echo "=============================="
+          FLIXEL_PATH="$(haxelib path flixel | grep -E '/flixel/5,8,0($|/)' | head -n 1 || true)"
 
-          haxe --version
+          if [ -z "$FLIXEL_PATH" ]; then
+            FLIXEL_PATH="$(haxelib path flixel | head -n 1)"
+          fi
+
+          echo "Flixel encontrado em:"
+          echo "$FLIXEL_PATH"
+
+          if [ ! -f "$FLIXEL_PATH/include.xml" ]; then
+            echo "ERRO: include.xml do Flixel não encontrado."
+
+            echo "Arquivos encontrados:"
+            find "$FLIXEL_PATH" -maxdepth 2 -type f | head -100
+
+            exit 1
+          fi
 
           echo ""
-          echo "=============================="
-          echo "HAXELIB"
-          echo "=============================="
+          echo "=== Antes da correção ==="
+          grep -n -C 3 "&ge;\|android:allowBackup\|appCategory" \
+            "$FLIXEL_PATH/include.xml" || true
 
-          haxelib list
+          # O Flixel antigo usa uma condição XML que acaba
+          # gerando:
+          #
+          # if="lime &ge; 8.2.0"
+          #
+          # no AndroidManifest.xml.
+          #
+          # Removemos somente essa condição problemática.
+          sed -i 's/ if="lime &ge; 8\.2\.0"//g' \
+            "$FLIXEL_PATH/include.xml"
 
+          sed -i 's/ if="lime >= 8\.2\.0"//g' \
+            "$FLIXEL_PATH/include.xml"
 
-      # ==========================================
-      # LIME ANDROID
-      # ==========================================
-      - name: Setup Lime Android
+          echo ""
+          echo "=== Depois da correção ==="
+          grep -n -C 3 "&ge;\|android:allowBackup\|appCategory" \
+            "$FLIXEL_PATH/include.xml" || true
+
+          echo ""
+          echo "Correção do Flixel concluída."
+
+      - name: Configure Lime Android
         run: |
           haxelib run lime setup android
 
-          haxelib run lime config ANDROID_SDK \
-            "$ANDROID_SDK_ROOT"
-
-          haxelib run lime config ANDROID_NDK_ROOT \
-            "$ANDROID_SDK_ROOT/ndk/25.2.9519653"
-
-
-      # ==========================================
-      # LIMPAR
-      # ==========================================
-      - name: Clean
+      - name: Verify Haxe libraries
         run: |
-          rm -rf export
-          rm -rf build
+          echo "========== HAXE =========="
+          haxe --version
 
+          echo "========== HAXELIBS =========="
+          haxelib list
 
-      # ==========================================
-      # GERAR PROJETO SEM COMPILAR
-      # ==========================================
-      - name: Generate Android project
+          echo "========== LIME =========="
+          haxelib path lime
+
+          echo "========== FLIXEL =========="
+          haxelib path flixel
+
+          echo "========== HXCPP =========="
+          haxelib path hxcpp
+
+      - name: Clean old Android export
         run: |
-          haxelib run lime build android -release -n
+          rm -rf export/release/android
+          rm -rf export/debug/android
 
-
-      # ==========================================
-      # ENCONTRAR MANIFEST
-      # ==========================================
-      - name: Locate AndroidManifest
+      - name: Build Android APK
         run: |
-          echo "========================================"
-          echo "TODOS OS MANIFESTS"
-          echo "========================================"
+          haxelib run lime build android -release
 
-          find export \
-            -name "AndroidManifest.xml" \
-            -type f \
-            -print
-
-
-      # ==========================================
-      # MOSTRAR O MANIFEST EXATO DO ERRO
-      # ==========================================
-      - name: Show failing AndroidManifest
-        run: |
-
-          FILE="export/release/android/bin/app/src/main/AndroidManifest.xml"
-
-          echo "========================================"
-          echo "MANIFEST DO ERRO"
-          echo "========================================"
-
-          if [ ! -f "$FILE" ]; then
-            echo "ERRO: arquivo não encontrado:"
-            echo "$FILE"
-            exit 1
-          fi
-
-          echo ""
-          echo "Arquivo:"
-          echo "$FILE"
-
-          echo ""
-          echo "========================================"
-          echo "CONTEÚDO COM LINHAS"
-          echo "========================================"
-
-          nl -ba "$FILE"
-
-
-      # ==========================================
-      # PROCURAR CARACTERES SUSPEITOS
-      # ==========================================
-      - name: Search invalid Manifest syntax
-        run: |
-
-          FILE="export/release/android/bin/app/src/main/AndroidManifest.xml"
-
-          echo "========================================"
-          echo "CARACTERES / SINTAXE SUSPEITA"
-          echo "========================================"
-
-          echo ""
-          echo "--- &ge; ---"
-          grep -n '&ge;' "$FILE" || true
-
-          echo ""
-          echo "--- &le; ---"
-          grep -n '&le;' "$FILE" || true
-
-          echo ""
-          echo "--- if= ---"
-          grep -n 'if=' "$FILE" || true
-
-          echo ""
-          echo "--- lime ---"
-          grep -n 'lime' "$FILE" || true
-
-          echo ""
-          echo "--- caracteres & não permitidos ---"
-          grep -n '&[^a-zA-Z#]' "$FILE" || true
-
-
-      # ==========================================
-      # VALIDAR XML
-      # ==========================================
-      - name: Validate Manifest XML
-        run: |
-
-          FILE="export/release/android/bin/app/src/main/AndroidManifest.xml"
-
-          echo "========================================"
-          echo "VALIDANDO XML"
-          echo "========================================"
-
-          python3 - "$FILE" <<'PY'
-
-          import sys
-          import xml.etree.ElementTree as ET
-
-          file = sys.argv[1]
-
-          print("Arquivo:", file)
-          print("")
-
-          try:
-              ET.parse(file)
-
-              print("========================================")
-              print("XML VÁLIDO")
-              print("========================================")
-
-          except ET.ParseError as error:
-
-              print("========================================")
-              print("XML INVÁLIDO")
-              print("========================================")
-
-              print(error)
-
-              if hasattr(error, "position"):
-                  line, column = error.position
-
-                  print("")
-                  print("Linha:", line)
-                  print("Coluna:", column)
-
-                  print("")
-                  print("Trecho do erro:")
-
-                  with open(file, "r", encoding="utf-8") as f:
-                      lines = f.readlines()
-
-                  start = max(0, line - 3)
-                  end = min(len(lines), line + 2)
-
-                  for i in range(start, end):
-                      print(
-                          f"{i + 1}: {lines[i].rstrip()}"
-                      )
-
-              raise SystemExit(1)
-
-          PY
-
-
-      # ==========================================
-      # NÃO DEIXAR O GRADLE COMEÇAR SE O XML ESTÁ RUIM
-      # ==========================================
-      - name: Manifest check completed
-        run: |
-          echo "========================================"
-          echo "MANIFEST PASSOU NA VALIDAÇÃO"
-          echo "========================================"
-
-
-      # ==========================================
-      # BUILD APK
-      # ==========================================
-      - name: Build APK
-        run: |
-
-          cd export/release/android
-
-          chmod +x gradlew
-
-          ./gradlew assembleDebug \
-            --stacktrace \
-            --info
-
-
-      # ==========================================
-      # PROCURAR APK
-      # ==========================================
       - name: Find APK
-        if: success()
         run: |
+          echo "========== APKs encontrados =========="
 
-          find export \
+          find . \
             -type f \
-            -name "*.apk" \
+            \( -name "*.apk" -o -name "*.aab" \) \
             -print
 
-
-      # ==========================================
-      # PREPARAR APK
-      # ==========================================
-      - name: Prepare APK
-        if: success()
-        run: |
-
-          mkdir -p dist
-
-          APK=$(find export \
-            -type f \
-            -name "*.apk" \
-            | head -n 1)
-
-          if [ -z "$APK" ]; then
-            echo "APK não encontrado."
-            exit 1
-          fi
-
-          cp "$APK" \
-            dist/TwiddleFinger-Android.apk
-
-
-      # ==========================================
-      # UPLOAD APK
-      # ==========================================
       - name: Upload APK
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: TwiddleFinger-Android
-          path: dist/TwiddleFinger-Android.apk
+          path: |
+            export/**/*.apk
+            export/**/*.aab
+          if-no-files-found: error
+          compression-level: 0
