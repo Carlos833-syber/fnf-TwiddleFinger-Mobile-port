@@ -9,13 +9,16 @@ on:
 
 jobs:
   build-android:
-    name: Build Android APK
     runs-on: ubuntu-22.04
 
     steps:
 
+      # ==========================================
+      # CHECKOUT
+      # ==========================================
       - name: Checkout
         uses: actions/checkout@v4
+
 
       # ==========================================
       # JAVA
@@ -26,6 +29,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+
       # ==========================================
       # HAXE
       # ==========================================
@@ -34,13 +38,14 @@ jobs:
         with:
           haxe-version: '4.3.5'
 
+
       # ==========================================
       # ANDROID
       # ==========================================
       - name: Setup Android
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK and NDK
+      - name: Install Android SDK
         run: |
           sdkmanager --sdk_root="$ANDROID_SDK_ROOT" \
             "platform-tools" \
@@ -51,28 +56,7 @@ jobs:
           echo "ANDROID_SDK=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> "$GITHUB_ENV"
 
-      # ==========================================
-      # DEPENDÊNCIAS
-      # ==========================================
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-
-          sudo apt-get install -y \
-            libvlc-dev \
-            libvlccore-dev \
-            libasound2-dev \
-            libpulse-dev \
-            libx11-dev \
-            libxext-dev \
-            libxrandr-dev \
-            libxinerama-dev \
-            libxcursor-dev \
-            libxi-dev \
-            libgl1-mesa-dev \
-            libglu1-mesa-dev
 
       # ==========================================
       # HAXELIB
@@ -80,6 +64,7 @@ jobs:
       - name: Setup Haxelib
         run: |
           haxelib setup ~/haxelib
+
 
       # ==========================================
       # HMM
@@ -89,6 +74,7 @@ jobs:
           haxelib install hmm --quiet
           haxelib run hmm install
 
+
       # ==========================================
       # LIME
       # ==========================================
@@ -96,6 +82,7 @@ jobs:
         run: |
           haxelib remove lime || true
           haxelib install lime 8.3.2 --quiet
+
 
       # ==========================================
       # OPENFL
@@ -105,59 +92,56 @@ jobs:
           haxelib remove openfl || true
           haxelib install openfl --quiet
 
+
       # ==========================================
       # HXCPP
       # ==========================================
-      - name: Install hxcpp 4.3.45
+      - name: Install hxcpp
         run: |
           curl -L \
-            -o /tmp/hxcpp-4.3.45.zip \
+            -o /tmp/hxcpp.zip \
             https://github.com/HaxeFoundation/hxcpp/releases/download/v4.3.45/hxcpp-4.3.45.zip
 
           haxelib remove hxcpp || true
+          haxelib install /tmp/hxcpp.zip --quiet
 
-          haxelib install /tmp/hxcpp-4.3.45.zip --quiet
 
       # ==========================================
-      # FLIXEL 5.8.0
+      # FLIXEL
       # ==========================================
       - name: Install Flixel 5.8.0
         run: |
           haxelib remove flixel || true
           haxelib install flixel 5.8.0 --quiet
 
+
       # ==========================================
       # HXVLС
       # ==========================================
-      - name: Install hxvlc 1.5.4
+      - name: Install hxvlc
         run: |
           haxelib remove hxvlc || true
           haxelib install hxvlc 1.5.4 --quiet
 
+
       # ==========================================
-      # VERIFICAR HAXELIB
+      # VERIFICAR DEPENDÊNCIAS
       # ==========================================
       - name: Check dependencies
         run: |
-          echo "========================================"
+          echo "=============================="
           echo "HAXE"
-          echo "========================================"
+          echo "=============================="
 
           haxe --version
 
           echo ""
-          echo "========================================"
+          echo "=============================="
           echo "HAXELIB"
-          echo "========================================"
+          echo "=============================="
 
           haxelib list
 
-          echo ""
-          echo "========================================"
-          echo "FLIXEL"
-          echo "========================================"
-
-          haxelib path flixel
 
       # ==========================================
       # LIME ANDROID
@@ -172,8 +156,6 @@ jobs:
           haxelib run lime config ANDROID_NDK_ROOT \
             "$ANDROID_SDK_ROOT/ndk/25.2.9519653"
 
-          haxelib run lime config JAVA_HOME \
-            "$JAVA_HOME"
 
       # ==========================================
       # LIMPAR
@@ -183,21 +165,22 @@ jobs:
           rm -rf export
           rm -rf build
 
+
       # ==========================================
-      # GERAR PROJETO
+      # GERAR PROJETO SEM COMPILAR
       # ==========================================
       - name: Generate Android project
         run: |
           haxelib run lime build android -release -n
 
-      # ==========================================
-      # CORRIGIR MANIFEST
-      # ==========================================
-      - name: Fix AndroidManifest
-        run: |
 
+      # ==========================================
+      # ENCONTRAR MANIFEST
+      # ==========================================
+      - name: Locate AndroidManifest
+        run: |
           echo "========================================"
-          echo "PROCURANDO ANDROIDMANIFEST"
+          echo "TODOS OS MANIFESTS"
           echo "========================================"
 
           find export \
@@ -205,97 +188,148 @@ jobs:
             -type f \
             -print
 
-          echo ""
-          echo "========================================"
-          echo "CORRIGINDO"
-          echo "========================================"
-
-          find export \
-            -name "AndroidManifest.xml" \
-            -type f \
-            | while read file
-          do
-
-            echo "Corrigindo: $file"
-
-            sed -i 's/ if="lime &ge; 8.2.0"//g' "$file"
-            sed -i 's/ if="lime >= 8.2.0"//g' "$file"
-
-            sed -i 's/ if="lime &lt;= 8.2.0"//g' "$file"
-            sed -i 's/ if="lime <= 8.2.0"//g' "$file"
-
-          done
 
       # ==========================================
-      # VALIDAR MANIFEST
+      # MOSTRAR O MANIFEST EXATO DO ERRO
       # ==========================================
-      - name: Validate AndroidManifest
+      - name: Show failing AndroidManifest
         run: |
 
-          python3 - <<'PY'
+          FILE="export/release/android/bin/app/src/main/AndroidManifest.xml"
 
-          import glob
+          echo "========================================"
+          echo "MANIFEST DO ERRO"
+          echo "========================================"
+
+          if [ ! -f "$FILE" ]; then
+            echo "ERRO: arquivo não encontrado:"
+            echo "$FILE"
+            exit 1
+          fi
+
+          echo ""
+          echo "Arquivo:"
+          echo "$FILE"
+
+          echo ""
+          echo "========================================"
+          echo "CONTEÚDO COM LINHAS"
+          echo "========================================"
+
+          nl -ba "$FILE"
+
+
+      # ==========================================
+      # PROCURAR CARACTERES SUSPEITOS
+      # ==========================================
+      - name: Search invalid Manifest syntax
+        run: |
+
+          FILE="export/release/android/bin/app/src/main/AndroidManifest.xml"
+
+          echo "========================================"
+          echo "CARACTERES / SINTAXE SUSPEITA"
+          echo "========================================"
+
+          echo ""
+          echo "--- &ge; ---"
+          grep -n '&ge;' "$FILE" || true
+
+          echo ""
+          echo "--- &le; ---"
+          grep -n '&le;' "$FILE" || true
+
+          echo ""
+          echo "--- if= ---"
+          grep -n 'if=' "$FILE" || true
+
+          echo ""
+          echo "--- lime ---"
+          grep -n 'lime' "$FILE" || true
+
+          echo ""
+          echo "--- caracteres & não permitidos ---"
+          grep -n '&[^a-zA-Z#]' "$FILE" || true
+
+
+      # ==========================================
+      # VALIDAR XML
+      # ==========================================
+      - name: Validate Manifest XML
+        run: |
+
+          FILE="export/release/android/bin/app/src/main/AndroidManifest.xml"
+
+          echo "========================================"
+          echo "VALIDANDO XML"
+          echo "========================================"
+
+          python3 - "$FILE" <<'PY'
+
+          import sys
           import xml.etree.ElementTree as ET
 
-          files = glob.glob(
-              "export/release/android/**/AndroidManifest.xml",
-              recursive=True
-          )
+          file = sys.argv[1]
 
-          print("========================================")
-          print("VALIDANDO MANIFEST")
-          print("========================================")
+          print("Arquivo:", file)
+          print("")
 
-          if not files:
-              print("Nenhum AndroidManifest encontrado.")
+          try:
+              ET.parse(file)
+
+              print("========================================")
+              print("XML VÁLIDO")
+              print("========================================")
+
+          except ET.ParseError as error:
+
+              print("========================================")
+              print("XML INVÁLIDO")
+              print("========================================")
+
+              print(error)
+
+              if hasattr(error, "position"):
+                  line, column = error.position
+
+                  print("")
+                  print("Linha:", line)
+                  print("Coluna:", column)
+
+                  print("")
+                  print("Trecho do erro:")
+
+                  with open(file, "r", encoding="utf-8") as f:
+                      lines = f.readlines()
+
+                  start = max(0, line - 3)
+                  end = min(len(lines), line + 2)
+
+                  for i in range(start, end):
+                      print(
+                          f"{i + 1}: {lines[i].rstrip()}"
+                      )
+
               raise SystemExit(1)
-
-          for file in files:
-
-              print("")
-              print("Arquivo:", file)
-
-              try:
-                  ET.parse(file)
-                  print("XML OK")
-
-              except Exception as error:
-                  print("XML INVÁLIDO:")
-                  print(error)
-                  raise SystemExit(1)
 
           PY
 
+
       # ==========================================
-      # MOSTRAR MANIFEST
+      # NÃO DEIXAR O GRADLE COMEÇAR SE O XML ESTÁ RUIM
       # ==========================================
-      - name: Show AndroidManifest
+      - name: Manifest check completed
         run: |
-
           echo "========================================"
-          echo "MANIFEST FINAL"
+          echo "MANIFEST PASSOU NA VALIDAÇÃO"
           echo "========================================"
 
-          find export/release/android \
-            -name "AndroidManifest.xml" \
-            -type f \
-            -exec sh -c '
-              echo ""
-              echo "========================================"
-              echo "$1"
-              echo "========================================"
-              nl -ba "$1"
-            ' _ {} \;
 
       # ==========================================
       # BUILD APK
       # ==========================================
       - name: Build APK
         run: |
-
-          echo "========================================"
-          echo "BUILD ANDROID"
-          echo "========================================"
 
           cd export/release/android
 
@@ -305,6 +339,7 @@ jobs:
             --stacktrace \
             --info
 
+
       # ==========================================
       # PROCURAR APK
       # ==========================================
@@ -312,14 +347,11 @@ jobs:
         if: success()
         run: |
 
-          echo "========================================"
-          echo "APK"
-          echo "========================================"
-
           find export \
             -type f \
             -name "*.apk" \
             -print
+
 
       # ==========================================
       # PREPARAR APK
@@ -343,6 +375,7 @@ jobs:
           cp "$APK" \
             dist/TwiddleFinger-Android.apk
 
+
       # ==========================================
       # UPLOAD APK
       # ==========================================
@@ -352,57 +385,3 @@ jobs:
         with:
           name: TwiddleFinger-Android
           path: dist/TwiddleFinger-Android.apk
-          if-no-files-found: error
-
-      # ==========================================
-      # DIAGNÓSTICO
-      # ==========================================
-      - name: Diagnostics
-        if: always()
-        run: |
-
-          echo "========================================"
-          echo "DIAGNÓSTICO"
-          echo "========================================"
-
-          echo ""
-          echo "HAXELIB:"
-          haxelib list || true
-
-          echo ""
-          echo "PROJECT.XML:"
-          cat Project.xml || true
-
-          echo ""
-          echo "HMM.JSON:"
-          cat hmm.json || true
-
-          echo ""
-          echo "MANIFESTS:"
-          find export \
-            -name "AndroidManifest.xml" \
-            -type f \
-            -print \
-            || true
-
-          echo ""
-          echo "PROCURANDO LIME / IF:"
-          grep -Rni \
-            -E 'lime|&ge;|&le;|if=' \
-            export/release/android \
-            2>/dev/null \
-            || true
-
-      # ==========================================
-      # UPLOAD DIAGNÓSTICOS
-      # ==========================================
-      - name: Upload diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: TwiddleFinger-Android-Diagnostics
-          path: |
-            export/
-            Project.xml
-            hmm.json
-          if-no-files-found: warn
