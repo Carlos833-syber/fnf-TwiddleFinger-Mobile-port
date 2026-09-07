@@ -44,22 +44,27 @@ jobs:
           echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> $GITHUB_ENV
           echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> $GITHUB_ENV
 
-      - name: Install Haxelib dependencies
+      - name: Setup Haxelib
         run: |
           haxelib setup ~/haxelib
 
+      - name: Install HMM
+        run: |
           haxelib install hmm --quiet
 
+      - name: Install project dependencies
+        run: |
           if [ -f hmm.json ]; then
             haxelib run hmm install
           fi
 
-      - name: Install exact Flixel 5.8.0
+      - name: Install Flixel 5.8.0
         run: |
           haxelib install flixel 5.8.0 --quiet
 
-          echo "=== Flixel path ==="
-          haxelib path flixel
+      - name: Install hxvlc 1.5.4
+        run: |
+          haxelib install hxvlc 1.5.4 --quiet
 
       - name: Install Lime 8.3.2
         run: |
@@ -70,9 +75,10 @@ jobs:
         run: |
           haxelib install openfl --quiet
 
-      - name: Install hxcpp
+      - name: Install hxcpp 4.3.45
+        shell: bash
         run: |
-          rm -rf .haxelib/hxcpp
+          rm -rf /tmp/hxcpp
 
           git clone --depth 1 \
             https://github.com/HaxeFoundation/hxcpp.git \
@@ -88,21 +94,19 @@ jobs:
 
           haxelib dev hxcpp /tmp/hxcpp
 
-          echo "=== hxcpp ==="
+          echo "========== HXCPP =========="
           haxelib path hxcpp
 
-      - name: Install Lime native files
+      - name: Setup Lime
         run: |
           haxelib run lime setup
 
-      - name: Fix Flixel Android Manifest condition
+      - name: Fix Flixel Android Manifest
         shell: bash
         run: |
           set -e
 
-          echo "======================================"
-          echo "Procurando include.xml do Flixel"
-          echo "======================================"
+          echo "========== Procurando Flixel =========="
 
           FLIXEL_PATH="$(haxelib path flixel | grep -E '/flixel/5,8,0($|/)' | head -n 1 || true)"
 
@@ -110,67 +114,49 @@ jobs:
             FLIXEL_PATH="$(haxelib path flixel | head -n 1)"
           fi
 
-          echo "Flixel encontrado em:"
+          echo "Flixel:"
           echo "$FLIXEL_PATH"
 
           if [ ! -f "$FLIXEL_PATH/include.xml" ]; then
             echo "ERRO: include.xml do Flixel não encontrado."
-
-            echo "Arquivos encontrados:"
-            find "$FLIXEL_PATH" -maxdepth 2 -type f | head -100
-
             exit 1
           fi
 
-          echo ""
-          echo "=== Antes da correção ==="
-          grep -n -C 3 "&ge;\|android:allowBackup\|appCategory" \
-            "$FLIXEL_PATH/include.xml" || true
+          echo "========== Corrigindo include.xml =========="
 
-          # O Flixel antigo usa uma condição XML que acaba
-          # gerando:
-          #
-          # if="lime &ge; 8.2.0"
-          #
-          # no AndroidManifest.xml.
-          #
-          # Removemos somente essa condição problemática.
           sed -i 's/ if="lime &ge; 8\.2\.0"//g' \
             "$FLIXEL_PATH/include.xml"
 
           sed -i 's/ if="lime >= 8\.2\.0"//g' \
             "$FLIXEL_PATH/include.xml"
 
-          echo ""
-          echo "=== Depois da correção ==="
-          grep -n -C 3 "&ge;\|android:allowBackup\|appCategory" \
-            "$FLIXEL_PATH/include.xml" || true
+          echo "Correção concluída."
 
-          echo ""
-          echo "Correção do Flixel concluída."
-
-      - name: Configure Lime Android
+      - name: Setup Lime Android
         run: |
           haxelib run lime setup android
 
-      - name: Verify Haxe libraries
+      - name: Check libraries
         run: |
           echo "========== HAXE =========="
           haxe --version
 
-          echo "========== HAXELIBS =========="
+          echo "========== HAXELIB =========="
           haxelib list
 
-          echo "========== LIME =========="
-          haxelib path lime
+          echo "========== HXVLС =========="
+          haxelib path hxvlc
 
           echo "========== FLIXEL =========="
           haxelib path flixel
 
+          echo "========== LIME =========="
+          haxelib path lime
+
           echo "========== HXCPP =========="
           haxelib path hxcpp
 
-      - name: Clean old Android export
+      - name: Clean Android export
         run: |
           rm -rf export/release/android
           rm -rf export/debug/android
@@ -181,7 +167,7 @@ jobs:
 
       - name: Find APK
         run: |
-          echo "========== APKs encontrados =========="
+          echo "========== APKs =========="
 
           find . \
             -type f \
