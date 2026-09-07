@@ -9,8 +9,18 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
+
+      # ============================================================
+      # CHECKOUT
+      # ============================================================
+
       - name: Checkout
         uses: actions/checkout@v4
+
+
+      # ============================================================
+      # JAVA
+      # ============================================================
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -18,161 +28,432 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Haxe
+
+      # ============================================================
+      # HAXE
+      # ============================================================
+
+      - name: Setup Haxe 4.3.5
         uses: krdlab/setup-haxe@v1
         with:
           haxe-version: '4.3.5'
+
+
+      # ============================================================
+      # ANDROID SDK
+      # ============================================================
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Install Android SDK packages
         run: |
+          yes | sdkmanager --licenses || true
+
           sdkmanager --install \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
 
-      - name: Install Android NDK
+
+      # ============================================================
+      # ANDROID NDK
+      # ============================================================
+
+      - name: Install Android NDK 25.2
         run: |
           sdkmanager --install "ndk;25.2.9519653"
 
+
+      # ============================================================
+      # ANDROID ENVIRONMENT
+      # ============================================================
+
       - name: Configure Android environment
         run: |
-          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-          echo "ANDROID_SDK=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-          echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> $GITHUB_ENV
-          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> $GITHUB_ENV
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+
+          echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> "$GITHUB_ENV"
+
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          echo "$ANDROID_SDK_ROOT/build-tools/35.0.0" >> "$GITHUB_PATH"
+
+
+      # ============================================================
+      # HAXELIB
+      # ============================================================
 
       - name: Setup Haxelib
         run: |
           haxelib setup ~/haxelib
 
+
+      # ============================================================
+      # HMM
+      # ============================================================
+
       - name: Install HMM
         run: |
           haxelib install hmm --quiet
 
+
+      # ============================================================
+      # PROJECT DEPENDENCIES
+      # ============================================================
+
       - name: Install project dependencies
+        shell: bash
         run: |
           if [ -f hmm.json ]; then
             haxelib run hmm install
           fi
 
-      - name: Install Flixel 5.8.0
+          echo ""
+          echo "======================================"
+          echo "Haxelib depois do HMM"
+          echo "======================================"
+
+          haxelib list
+
+
+      # ============================================================
+      # FORCE FLIXEL 5.8.0
+      # ============================================================
+
+      - name: Force Flixel 5.8.0
+        shell: bash
         run: |
+          set -e
+
+          echo "======================================"
+          echo "FORÇANDO FLIXEL 5.8.0"
+          echo "======================================"
+
+          # Remove versão local que o HMM possa ter colocado
+          rm -rf .haxelib/flixel
+
+          # Remove versões globais conflitantes
+          haxelib remove flixel || true
+
+          # Instala EXATAMENTE a versão usada pelo projeto
           haxelib install flixel 5.8.0 --quiet
 
+          echo ""
+          echo "Versões do Flixel instaladas:"
+          haxelib path flixel
+
+          FLIXEL_580="$(haxelib path flixel | grep '/flixel/5,8,0' | head -n 1 || true)"
+
+          if [ -z "$FLIXEL_580" ]; then
+            echo ""
+            echo "ERRO: Flixel 5.8.0 não foi encontrado."
+            echo ""
+            haxelib path flixel
+            exit 1
+          fi
+
+          echo ""
+          echo "Flixel 5.8.0 encontrado em:"
+          echo "$FLIXEL_580"
+
+          # Cria a dependência local usada pelo projeto
+          mkdir -p .haxelib
+
+          rm -rf .haxelib/flixel
+
+          ln -s "$FLIXEL_580" .haxelib/flixel
+
+          echo ""
+          echo "======================================"
+          echo "FLIXEL FINAL"
+          echo "======================================"
+
+          readlink -f .haxelib/flixel
+
+          if readlink -f .haxelib/flixel | grep -q "5,8,0"; then
+            echo "OK: Flixel 5.8.0 está ativo."
+          else
+            echo "ERRO: Flixel incorreto está sendo usado."
+            exit 1
+          fi
+
+
+      # ============================================================
+      # HXVLС
+      # ============================================================
+
       - name: Install hxvlc 1.5.4
+        shell: bash
         run: |
+          set -e
+
+          echo "Instalando hxvlc 1.5.4..."
+
           haxelib install hxvlc 1.5.4 --quiet
 
+          echo ""
+          echo "======================================"
+          echo "HXVLC"
+          echo "======================================"
+
+          haxelib path hxvlc
+
+
+      # ============================================================
+      # LIME
+      # ============================================================
+
       - name: Install Lime 8.3.2
+        shell: bash
         run: |
+          set -e
+
           haxelib remove lime || true
+
           haxelib install lime 8.3.2 --quiet
+
+          echo ""
+          echo "======================================"
+          echo "LIME"
+          echo "======================================"
+
+          haxelib path lime
+
+
+      # ============================================================
+      # OPENFL
+      # ============================================================
 
       - name: Install OpenFL
         run: |
           haxelib install openfl --quiet
 
+          echo ""
+          echo "======================================"
+          echo "OPENFL"
+          echo "======================================"
+
+          haxelib path openfl
+
+
+      # ============================================================
+      # HXCPP
+      # ============================================================
+
       - name: Install hxcpp 4.3.45
         shell: bash
         run: |
+          set -e
+
+          echo "======================================"
+          echo "INSTALANDO HXCPP"
+          echo "======================================"
+
           rm -rf /tmp/hxcpp
 
-          git clone --depth 1 \
+          git clone \
             https://github.com/HaxeFoundation/hxcpp.git \
             /tmp/hxcpp
 
           cd /tmp/hxcpp
 
-          git fetch --tags --depth 1 || true
+          git fetch --tags
 
-          git checkout 4.3.45 2>/dev/null || true
+          git checkout 4.3.45
 
           cd "$GITHUB_WORKSPACE"
 
           haxelib dev hxcpp /tmp/hxcpp
 
-          echo "========== HXCPP =========="
+          echo ""
+          echo "HXCPP ativo:"
           haxelib path hxcpp
+
+
+      # ============================================================
+      # LIME SETUP
+      # ============================================================
 
       - name: Setup Lime
         run: |
           haxelib run lime setup
+
+
+      # ============================================================
+      # CORRIGIR FLIXEL 5.8.0
+      # ============================================================
 
       - name: Fix Flixel Android Manifest
         shell: bash
         run: |
           set -e
 
-          echo "========== Procurando Flixel =========="
+          echo "======================================"
+          echo "CORRIGINDO FLIXEL ANDROID"
+          echo "======================================"
 
-          FLIXEL_PATH="$(haxelib path flixel | grep -E '/flixel/5,8,0($|/)' | head -n 1 || true)"
-
-          if [ -z "$FLIXEL_PATH" ]; then
-            FLIXEL_PATH="$(haxelib path flixel | head -n 1)"
-          fi
+          FLIXEL_PATH="$(readlink -f .haxelib/flixel)"
 
           echo "Flixel:"
           echo "$FLIXEL_PATH"
 
           if [ ! -f "$FLIXEL_PATH/include.xml" ]; then
-            echo "ERRO: include.xml do Flixel não encontrado."
+            echo ""
+            echo "ERRO: include.xml não encontrado."
             exit 1
           fi
 
-          echo "========== Corrigindo include.xml =========="
+          echo ""
+          echo "Antes:"
+          grep -n -C 3 \
+            "&ge;\|lime >=\|allowBackup\|appCategory" \
+            "$FLIXEL_PATH/include.xml" || true
 
+          # Remove a condição XML problemática
           sed -i 's/ if="lime &ge; 8\.2\.0"//g' \
             "$FLIXEL_PATH/include.xml"
 
           sed -i 's/ if="lime >= 8\.2\.0"//g' \
             "$FLIXEL_PATH/include.xml"
 
+          echo ""
+          echo "Depois:"
+          grep -n -C 3 \
+            "&ge;\|lime >=\|allowBackup\|appCategory" \
+            "$FLIXEL_PATH/include.xml" || true
+
+          echo ""
           echo "Correção concluída."
+
+
+      # ============================================================
+      # LIME ANDROID
+      # ============================================================
 
       - name: Setup Lime Android
         run: |
           haxelib run lime setup android
 
-      - name: Check libraries
+
+      # ============================================================
+      # VERIFICAR VERSÕES
+      # ============================================================
+
+      - name: Verify final Haxelib versions
+        shell: bash
         run: |
-          echo "========== HAXE =========="
+          echo ""
+          echo "======================================"
+          echo "HAXE"
+          echo "======================================"
+
           haxe --version
 
-          echo "========== HAXELIB =========="
+
+          echo ""
+          echo "======================================"
+          echo "HAXELIB LIST"
+          echo "======================================"
+
           haxelib list
 
-          echo "========== HXVLС =========="
+
+          echo ""
+          echo "======================================"
+          echo "FLIXEL"
+          echo "======================================"
+
+          readlink -f .haxelib/flixel
+
+          if ! readlink -f .haxelib/flixel | grep -q "5,8,0"; then
+            echo "ERRO: Flixel 6.x está sendo usado!"
+            exit 1
+          fi
+
+
+          echo ""
+          echo "======================================"
+          echo "HXVLС"
+          echo "======================================"
+
           haxelib path hxvlc
 
-          echo "========== FLIXEL =========="
-          haxelib path flixel
 
-          echo "========== LIME =========="
+          echo ""
+          echo "======================================"
+          echo "LIME"
+          echo "======================================"
+
           haxelib path lime
 
-          echo "========== HXCPP =========="
+
+          echo ""
+          echo "======================================"
+          echo "HXCPP"
+          echo "======================================"
+
           haxelib path hxcpp
+
+
+          echo ""
+          echo "Todas as verificações passaram."
+
+
+      # ============================================================
+      # LIMPAR BUILD ANTIGO
+      # ============================================================
 
       - name: Clean Android export
         run: |
           rm -rf export/release/android
           rm -rf export/debug/android
 
+          rm -rf .haxelib/lime/git
+
+
+      # ============================================================
+      # BUILD
+      # ============================================================
+
       - name: Build Android APK
+        shell: bash
         run: |
+          set -e
+
+          echo "======================================"
+          echo "COMPILANDO TWIDDLEFINGER ANDROID"
+          echo "======================================"
+
           haxelib run lime build android -release
 
+
+      # ============================================================
+      # PROCURAR APK
+      # ============================================================
+
       - name: Find APK
+        shell: bash
         run: |
-          echo "========== APKs =========="
+          echo ""
+          echo "======================================"
+          echo "APKs ENCONTRADOS"
+          echo "======================================"
 
           find . \
             -type f \
-            \( -name "*.apk" -o -name "*.aab" \) \
+            \( \
+              -name "*.apk" \
+              -o \
+              -name "*.aab" \
+            \) \
             -print
+
+
+      # ============================================================
+      # UPLOAD APK
+      # ============================================================
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
