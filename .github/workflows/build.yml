@@ -36,8 +36,8 @@ jobs:
 
       - name: Android environment
         run: |
-          echo "ANDROID_SDK=$ANDROID_HOME" >> "$GITHUB_ENV"
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK=$ANDROID_HOME" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/25.2.9519653" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.2.9519653" >> "$GITHUB_ENV"
 
@@ -64,25 +64,33 @@ jobs:
 
           if [ ! -d ".haxelib/flixel/5,8,0" ]; then
             echo "ERRO: Flixel 5.8.0 não foi instalado."
-            find .haxelib -maxdepth 4 -type d -name "flixel" -print
             exit 1
           fi
 
-          echo "Flixel 5.8.0 OK."
+          echo "Flixel 5.8.0 instalado."
 
       - name: Install HXVLС
         run: |
-          echo "Instalando hxvlc 1.5.4..."
+          echo "======================================"
+          echo "INSTALANDO HXVLС 1.5.4"
+          echo "======================================"
+
           haxelib install hxvlc 1.5.4
 
       - name: Install Lime
         run: |
-          echo "Instalando Lime 8.3.2..."
+          echo "======================================"
+          echo "INSTALANDO LIME 8.3.2"
+          echo "======================================"
+
           haxelib install lime 8.3.2
 
       - name: Install OpenFL
         run: |
-          echo "Instalando OpenFL..."
+          echo "======================================"
+          echo "INSTALANDO OPENFL"
+          echo "======================================"
+
           haxelib install openfl
 
       - name: Install HXCPP
@@ -111,6 +119,10 @@ jobs:
 
       - name: Setup Lime
         run: |
+          echo "======================================"
+          echo "CONFIGURANDO LIME"
+          echo "======================================"
+
           haxelib run lime setup
 
       - name: Patch Flixel XML
@@ -124,24 +136,13 @@ jobs:
           FLIXEL_DIR=".haxelib/flixel/5,8,0"
 
           if [ ! -d "$FLIXEL_DIR" ]; then
-            echo "Flixel não encontrado:"
-            find .haxelib -maxdepth 4 -type d -print
+            echo "ERRO: Flixel não encontrado."
             exit 1
           fi
-
-          echo "Diretório:"
-          echo "$FLIXEL_DIR"
-
-          echo ""
-          echo "Procurando &ge;..."
-
-          FOUND=0
 
           while IFS= read -r -d '' FILE
           do
             if grep -q '&ge;\|&amp;ge;' "$FILE"; then
-
-              FOUND=1
 
               echo "Corrigindo:"
               echo "$FILE"
@@ -158,22 +159,10 @@ jobs:
           )
 
           echo ""
+          echo "Verificação:"
+          grep -Rni '&ge;\|&amp;ge;' "$FLIXEL_DIR" || true
 
-          if [ "$FOUND" -eq 0 ]; then
-            echo "Nenhum &ge; encontrado."
-          else
-            echo "&ge; corrigido."
-          fi
-
-          echo ""
-          echo "Verificação final:"
-
-          grep -Rni \
-            '&ge;\|&amp;ge;' \
-            "$FLIXEL_DIR" \
-            || true
-
-      - name: Patch Project.xml
+      - name: Patch Project XML
         run: |
           set -e
 
@@ -183,14 +172,10 @@ jobs:
 
           if [ -f "Project.xml" ]; then
 
-            echo "Project.xml encontrado."
-
             sed -i 's/&amp;ge;/>=/g' Project.xml
             sed -i 's/&ge;/>=/g' Project.xml
 
-            echo ""
-            echo "Project.xml:"
-            cat Project.xml
+            echo "Project.xml OK."
 
           else
 
@@ -202,12 +187,12 @@ jobs:
       - name: Setup Android Lime
         run: |
           echo "======================================"
-          echo "SETUP ANDROID LIME"
+          echo "CONFIGURANDO ANDROID"
           echo "======================================"
 
           haxelib run lime setup android
 
-      - name: Clean build
+      - name: Clean
         run: |
           echo "======================================"
           echo "LIMPANDO BUILD"
@@ -251,6 +236,7 @@ jobs:
           echo "ANDROID_HOME=$ANDROID_HOME"
           echo "ANDROID_SDK=$ANDROID_SDK"
           echo "ANDROID_NDK_ROOT=$ANDROID_NDK_ROOT"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
 
           echo ""
           echo "Java:"
@@ -261,8 +247,8 @@ jobs:
           haxe --version
 
           echo ""
-          echo "Lime:"
-          haxelib run lime version
+          echo "Lime instalado:"
+          haxelib path lime
 
       - name: Build Android
         run: |
@@ -287,10 +273,11 @@ jobs:
 
           echo ""
           echo "======================================"
-          echo "ARQUIVOS ANDROID"
+          echo "ARQUIVOS GERADOS"
           echo "======================================"
 
           if [ -d "export" ]; then
+
             find export -type f \
               \( \
                 -name "*.apk" \
@@ -298,13 +285,16 @@ jobs:
                 -o -name "AndroidManifest.xml" \
               \) \
               -print
+
           else
+
             echo "Pasta export não encontrada."
+
           fi
 
           echo ""
           echo "======================================"
-          echo "MANIFESTS GERADOS"
+          echo "ANDROID MANIFEST"
           echo "======================================"
 
           find export \
@@ -314,11 +304,11 @@ jobs:
 
           exit $STATUS
 
-      - name: Show APK
+      - name: Find APK
         if: success()
         run: |
           echo "======================================"
-          echo "APK GERADO"
+          echo "PROCURANDO APK"
           echo "======================================"
 
           find export -type f \
